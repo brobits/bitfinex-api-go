@@ -31,6 +31,7 @@ type Client struct {
 	BaseURL *url.URL
 
 	HTTPClient *http.Client
+	httpDo func(c *http.Client, r *http.Request) (*http.Response, error)
 
 	// Auth data
 	APIKey    string
@@ -42,6 +43,7 @@ type Client struct {
 	Platform  *PlatformService
 	Positions *PositionService
 	Trades    *TradeService
+	Ticker	  *TickerService
 }
 
 func NewClient() *Client {
@@ -51,14 +53,21 @@ func NewClient() *Client {
 func NewClientWithHTTP(h *http.Client) *Client {
 	baseURL, _ := url.Parse(BaseURL)
 
-	c := &Client{BaseURL: baseURL, HTTPClient: h}
+	c := &Client{BaseURL: baseURL, HTTPClient: h, httpDo: nil}
 
 	c.Websocket = newBfxWebsocket(c, WebSocketURL)
 	c.Orders = &OrderService{client: c}
 	c.Platform = &PlatformService{client: c}
 	c.Positions = &PositionService{client: c}
 	c.Trades = &TradeService{client: c}
+	c.Ticker = &TickerService{client: c}
 
+	return c
+}
+
+func NewClientWithHTTPDo(httpDo func(c *http.Client, r *http.Request) (*http.Response, error)) *Client {
+	c := NewClient()
+	c.httpDo = httpDo
 	return c
 }
 
@@ -223,7 +232,13 @@ func (r *ErrorResponse) Error() string {
 
 // Do executes API request created by NewRequest method or custom *http.Request.
 func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
-	resp, err := httpDo(c.HTTPClient, req)
+	var do func(*http.Client, *http.Request) (*http.Response, error)
+	if c.httpDo == nil {
+		do = c.httpDo
+	} else {
+		do = httpDo
+	}
+	resp, err := do(c.HTTPClient, req)
 	if err != nil {
 		return nil, err
 	}
