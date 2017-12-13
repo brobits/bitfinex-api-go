@@ -16,15 +16,6 @@ func init() {
 	var expected []interface{}
 	var actual []interface{}
 
-	/*
-
-	orders, err := NewClient().Orders.All()
-
-	if err != nil {
-		t.Error(err)
-	}
-	 */
-
 	Given(`^I preload the URL "(.+)" with the following JSON:$`, func(url string, data string) {
 		err := json.Unmarshal([]byte(data), &expected)
 		if err != nil {
