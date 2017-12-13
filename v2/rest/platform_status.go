@@ -1,4 +1,4 @@
-package bitfinex
+package rest
 
 type PlatformService struct {
 	client *Client

@@ -1,4 +1,4 @@
-package bitfinex
+package domain
 
 import (
 	"fmt"
