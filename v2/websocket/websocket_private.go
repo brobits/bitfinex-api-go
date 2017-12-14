@@ -42,188 +42,188 @@ func (b *bfxWebsocket) convertRaw(term string, raw []interface{}) interface{} {
 		}
 		return domain.BalanceUpdate(o)
 	case "ps":
-		o, err := positionSnapshotFromRaw(raw)
+		o, err := domain.NewPositionSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "pn":
-		o, err := positionFromRaw(raw)
+		o, err := domain.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return PositionNew(o)
+		return domain.PositionNew(o)
 	case "pu":
-		o, err := positionFromRaw(raw)
+		o, err := domain.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return PositionUpdate(o)
+		return domain.PositionUpdate(o)
 	case "pc":
-		o, err := positionFromRaw(raw)
+		o, err := domain.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return PositionCancel(o)
+		return domain.PositionCancel(o)
 	case "ws":
-		o, err := walletSnapshotFromRaw(raw)
+		o, err := domain.NewWalletSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "wu":
-		o, err := walletFromRaw(raw)
+		o, err := domain.NewWalletFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return WalletUpdate(o)
+		return domain.WalletUpdate(o)
 	case "os":
-		o, err := orderSnapshotFromRaw(raw)
+		o, err := domain.NewOrderSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "on":
-		o, err := orderFromRaw(raw)
+		o, err := domain.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return OrderNew(o)
+		return domain.OrderNew(o)
 	case "ou":
-		o, err := orderFromRaw(raw)
+		o, err := domain.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return OrderUpdate(o)
+		return domain.OrderUpdate(o)
 	case "oc":
-		o, err := orderFromRaw(raw)
+		o, err := domain.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return OrderCancel(o)
+		return domain.OrderCancel(o)
 	case "hts":
-		o, err := tradeSnapshotFromRaw(raw)
+		o, err := domain.NewTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return HistoricalTradeSnapshot(o)
+		return domain.HistoricalTradeSnapshot(o)
 	case "te":
-		o, err := tradeExecutionFromRaw(raw)
+		o, err := domain.NewTradeExecutionFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "tu":
-		o, err := tradeFromRaw(raw)
+		o, err := domain.NewTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return TradeUpdate(o)
+		return domain.TradeUpdate(o)
 	case "fte":
-		o, err := fundingTradeFromRaw(raw)
+		o, err := domain.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingTradeExecution(o)
+		return domain.FundingTradeExecution(o)
 	case "ftu":
-		o, err := fundingTradeFromRaw(raw)
+		o, err := domain.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingTradeUpdate(o)
+		return domain.FundingTradeUpdate(o)
 	case "hfts":
-		o, err := fundingTradeSnapshotFromRaw(raw)
+		o, err := domain.NewFundingTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return HistoricalFundingTradeSnapshot(o)
+		return domain.HistoricalFundingTradeSnapshot(o)
 	case "n":
-		o, err := notificationFromRaw(raw)
+		o, err := domain.NewNotificationFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fos":
-		o, err := fundingOfferSnapshotFromRaw(raw)
+		o, err := domain.NewFundingOfferSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fon":
-		o, err := offerFromRaw(raw)
+		o, err := domain.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingOfferNew(o)
+		return domain.FundingOfferNew(o)
 	case "fou":
-		o, err := offerFromRaw(raw)
+		o, err := domain.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingOfferUpdate(o)
+		return domain.FundingOfferUpdate(o)
 	case "foc":
-		o, err := offerFromRaw(raw)
+		o, err := domain.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingOfferCancel(o)
+		return domain.FundingOfferCancel(o)
 	case "fiu":
-		o, err := fundingInfoFromRaw(raw)
+		o, err := domain.NewFundingInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fcs":
-		o, err := fundingCreditSnapshotFromRaw(raw)
+		o, err := domain.NewFundingCreditSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fcn":
-		o, err := creditFromRaw(raw)
+		o, err := domain.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingCreditNew(o)
+		return domain.FundingCreditNew(o)
 	case "fcu":
-		o, err := creditFromRaw(raw)
+		o, err := domain.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingCreditUpdate(o)
+		return domain.FundingCreditUpdate(o)
 	case "fcc":
-		o, err := creditFromRaw(raw)
+		o, err := domain.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingCreditCancel(o)
+		return domain.FundingCreditCancel(o)
 	case "fls":
-		o, err := fundingLoanSnapshotFromRaw(raw)
+		o, err := domain.NewFundingLoanSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fln":
-		o, err := loanFromRaw(raw)
+		o, err := domain.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingLoanNew(o)
+		return domain.FundingLoanNew(o)
 	case "flu":
-		o, err := loanFromRaw(raw)
+		o, err := domain.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingLoanUpdate(o)
+		return domain.FundingLoanUpdate(o)
 	case "flc":
-		o, err := loanFromRaw(raw)
+		o, err := domain.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return FundingLoanCancel(o)
+		return domain.FundingLoanCancel(o)
 	//case "uac":
 	case "hb":
-		return Heartbeat{}
+		return domain.Heartbeat{}
 	case "ats":
 		// TODO: Is not in documentation, so figure out what it is.
 		return nil
@@ -236,7 +236,7 @@ func (b *bfxWebsocket) convertRaw(term string, raw []interface{}) interface{} {
 	case "mis": // Should not be sent anymore as of 2017-04-01
 		return nil
 	case "miu":
-		o, err := marginInfoFromRaw(raw)
+		o, err := domain.NewMarginInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}

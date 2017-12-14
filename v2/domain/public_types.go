@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 type Ticker struct {
 	Symbol          string
 	Bid             float64
@@ -27,3 +29,34 @@ type TickerSnapshot []Ticker
 //Rate   float64
 //Period int64
 //}
+
+func NewTickerFromRaw(raw []interface{}) (t Ticker, err error) {
+	if len(raw) < 26 {
+		return t, fmt.Errorf("data slice too short for ticker: %#v", raw)
+	}
+
+	t = Ticker{
+		/*
+		ID:            int64(f64ValOrZero(raw[0])),
+		GID:           int64(f64ValOrZero(raw[1])),
+		CID:           int64(f64ValOrZero(raw[2])),
+		Symbol:        sValOrEmpty(raw[3]),
+		MTSCreated:    int64(f64ValOrZero(raw[4])),
+		MTSUpdated:    int64(f64ValOrZero(raw[5])),
+		Amount:        f64ValOrZero(raw[6]),
+		AmountOrig:    f64ValOrZero(raw[7]),
+		Type:          sValOrEmpty(raw[8]),
+		TypePrev:      sValOrEmpty(raw[9]),
+		Flags:         i64ValOrZero(raw[12]),
+		Status:        OrderStatus(sValOrEmpty(raw[13])),
+		Price:         f64ValOrZero(raw[16]),
+		PriceAvg:      f64ValOrZero(raw[17]),
+		PriceTrailing: f64ValOrZero(raw[18]),
+		PriceAuxLimit: f64ValOrZero(raw[19]),
+		Notify:        bValOrFalse(raw[23]),
+		Hidden:        bValOrFalse(raw[24]),
+		PlacedID:      i64ValOrZero(raw[25]),*/
+	}
+
+	return
+}

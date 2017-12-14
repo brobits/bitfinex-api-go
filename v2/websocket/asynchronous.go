@@ -6,12 +6,7 @@ import (
 )
 
 type Asynchronous interface {
-	Send(request interface{}) (<-chan interface{}, error)
-}
-
-// AsyncCracker rather than generic Cracker to encapsulate WebSocket-specific domain messages
-type AsyncCracker interface {
-	CrackTicker(msg interface{}) (*domain.Ticker, error)
+	Send(request interface{}) (<-chan []interface{}, error)
 }
 
 type MarketData interface {
@@ -20,12 +15,6 @@ type MarketData interface {
 
 type ExampleClient struct {
 	Asynchronous
-	AsyncCracker
-}
-
-func (e ExampleClient) CrackTicker(msg interface{}) (*domain.Ticker, error) {
-	// TODO use websocket service to crack interface into strongly-typed ticker w/ error response
-	return &domain.Ticker{}, nil
 }
 
 func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *domain.Ticker, error) {
@@ -46,12 +35,12 @@ func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *domain.Ticker, er
 				// channel closed, propagate EOT
 				close(ch)
 			}
-			tick, err := e.AsyncCracker.CrackTicker(o)
+			tick, err := domain.NewTickerFromRaw(o)
 			if err != nil {
 				log.Printf("could not crack message: %s", err.Error())
 				continue
 			}
-			ch <- tick
+			ch <- &tick
 		}
 	}()
 	return ch, nil
