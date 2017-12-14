@@ -7,25 +7,20 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
-// OrderService manages the Order endpoint.
+// OrderService manages data flow for the Order API endpoint
 type OrderService struct {
-	client *Client
+	Synchronous
 }
 
 // All returns all orders for the authenticated account.
 func (s *OrderService) All(symbol string) (domain.OrderSnapshot, error) {
-	req, err := s.client.newAuthenticatedRequest("POST", path.Join("orders", symbol), nil)
+	raw, err := s.Request(NewRequest(path.Join("orders", symbol)))
+
 	if err != nil {
 		return nil, err
 	}
 
-	var raw []interface{}
-	_, err = s.client.do(req, &raw)
-	if err != nil {
-		return nil, err
-	}
-
-	os, err := orderSnapshotFromRaw(raw)
+	os, err := domain.NewOrderSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -37,9 +32,11 @@ func (s *OrderService) All(symbol string) (domain.OrderSnapshot, error) {
 // the All() method, since the API does not provide lookup for a single Order.
 func (s *OrderService) Status(orderID int64) (o domain.Order, err error) {
 	os, err := s.All("")
+
 	if err != nil {
 		return o, err
 	}
+
 	if len(os) == 0 {
 		return o, bitfinex.ErrNotFound
 	}
@@ -59,19 +56,13 @@ func (s *OrderService) History(symbol string) (domain.OrderSnapshot, error) {
 		return nil, fmt.Errorf("symbol cannot be empty")
 	}
 
-	req, err := s.client.newAuthenticatedRequest("POST", path.Join("orders", symbol, "hist"), nil)
+	raw, err := s.Request(NewRequest(path.Join("orders", symbol, "hist")))
+
 	if err != nil {
 		return nil, err
 	}
 
-	var raw []interface{}
-	_, err = s.client.do(req, &raw)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("raw: %#v\n", raw)
-
-	os, err := orderSnapshotFromRaw(raw)
+	os, err := domain.NewOrderSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func f64Slice(in []interface{}) ([]float64, error) {
+func F64Slice(in []interface{}) ([]float64, error) {
 	var ret []float64
 	for _, e := range in {
 		if item, ok := e.(float64); ok {

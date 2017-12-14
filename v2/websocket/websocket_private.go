@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"fmt"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
 func (b *bfxWebsocket) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
@@ -16,7 +17,7 @@ func (b *bfxWebsocket) handlePrivateDataMessage(data []interface{}) (ms interfac
 
 	if len(data) == 2 || term == "hb" { // Heartbeat
 		// TODO: Consider adding a switch to enable/disable passing these along.
-		return Heartbeat{}, nil
+		return domain.Heartbeat{}, nil
 	}
 
 	list, ok := data[2].([]interface{})
@@ -35,11 +36,11 @@ func (b *bfxWebsocket) convertRaw(term string, raw []interface{}) interface{} {
 	// The things you do to get proper types.
 	switch term {
 	case "bu":
-		o, err := balanceInfoFromRaw(raw)
+		o, err := domain.NewBalanceInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return BalanceUpdate(o)
+		return domain.BalanceUpdate(o)
 	case "ps":
 		o, err := positionSnapshotFromRaw(raw)
 		if err != nil {

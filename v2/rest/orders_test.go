@@ -5,10 +5,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
 func TestOrdersAll(t *testing.T) {
-	httpDo = func(_ *http.Client, req *http.Request) (*http.Response, error) {
+	httpDo := func(_ *http.Client, req *http.Request) (*http.Response, error) {
 		msg := `
 				[
 					[4419360502,null,83283216761,"tIOTBTC",1508281683000,1508281731000,63938,63938,"EXCHANGE LIMIT",null,null,null,null,"CANCELED",null,null,0.0000843,0,0,0,null,null,null,0,0,null],
@@ -22,7 +23,7 @@ func TestOrdersAll(t *testing.T) {
 		return &resp, nil
 	}
 
-	orders, err := NewClient().Orders.All("")
+	orders, err := NewClientWithHttpDo(httpDo).Orders.All("")
 
 	if err != nil {
 		t.Error(err)
@@ -34,7 +35,7 @@ func TestOrdersAll(t *testing.T) {
 }
 
 func TestOrdersHistory(t *testing.T) {
-	httpDo = func(_ *http.Client, req *http.Request) (*http.Response, error) {
+	httpDo := func(_ *http.Client, req *http.Request) (*http.Response, error) {
 		msg := `
 				[
 					[4419360502,null,83283216761,"tIOTBTC",1508281683000,1508281731000,63938,63938,"EXCHANGE LIMIT",null,null,null,null,"CANCELED",null,null,0.0000843,0,0,0,null,null,null,0,0,null],
@@ -48,7 +49,7 @@ func TestOrdersHistory(t *testing.T) {
 		return &resp, nil
 	}
 
-	orders, err := NewClient().Orders.History(TradingPrefix + IOTBTC)
+	orders, err := NewClientWithHttpDo(httpDo).Orders.History(domain.TradingPrefix + IOTBTC)
 
 	if err != nil {
 		t.Error(err)

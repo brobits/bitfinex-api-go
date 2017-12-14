@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
 type unsubscribeMsg struct {
@@ -100,7 +101,7 @@ func (b *bfxWebsocket) handlePublicDataMessage(raw []interface{}) (interface{}, 
 		case []interface{}:
 			return b.processDataSlice(fp)
 		case string: // This should be a heartbeat.
-			return Heartbeat{}, nil
+			return domain.Heartbeat{}, nil
 		}
 	case 3:
 		// [ChanID, MsgType, [Data]]
@@ -124,7 +125,7 @@ func (b *bfxWebsocket) processDataSlice(data []interface{}) (interface{}, error)
 	case []interface{}: // [][]float64
 		for _, e := range data {
 			if s, ok := e.([]interface{}); ok {
-				item, err := f64Slice(s)
+				item, err := domain.F64Slice(s)
 				if err != nil {
 					return nil, err
 				}
@@ -134,7 +135,7 @@ func (b *bfxWebsocket) processDataSlice(data []interface{}) (interface{}, error)
 			}
 		}
 	case float64: // []float64
-		item, err := f64Slice(data)
+		item, err := domain.F64Slice(data)
 		if err != nil {
 			return nil, err
 		}

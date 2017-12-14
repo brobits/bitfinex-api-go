@@ -1,21 +1,22 @@
 package rest
 
 type PlatformService struct {
-	client *Client
+	Synchronous
 }
 
 // Status indicates whether the platform is currently operative or not.
 func (p *PlatformService) Status() (bool, error) {
-	req, err := p.client.newRequest("GET", "platform/status", nil, nil)
+	raw, err := p.Request(NewRequestWithMethod("platform/status", "GET"))
+
 	if err != nil {
 		return false, err
 	}
-
-	var s []int
-	_, err = p.client.do(req, &s)
-	if err != nil {
-		return false, err
+/*
+	// raw is an interface type, but we only care about len & index 0
+	s := make([]int, len(raw))
+	for i, v := range raw {
+		s[i] = v.(int)
 	}
-
-	return len(s) > 0 && s[0] == 1, nil
+*/
+	return len(raw) > 0 && raw[0].(int) == 1, nil
 }

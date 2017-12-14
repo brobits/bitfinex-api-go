@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"log"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
 type Asynchronous interface {
@@ -10,11 +11,11 @@ type Asynchronous interface {
 
 // AsyncCracker rather than generic Cracker to encapsulate WebSocket-specific domain messages
 type AsyncCracker interface {
-	CrackTicker(msg interface{}) (*Ticker, error)
+	CrackTicker(msg interface{}) (*domain.Ticker, error)
 }
 
 type MarketData interface {
-	SubscribeTicker(symbol string) <-chan *Ticker
+	SubscribeTicker(symbol string) <-chan *domain.Ticker
 }
 
 type ExampleClient struct {
@@ -22,13 +23,13 @@ type ExampleClient struct {
 	AsyncCracker
 }
 
-func (e ExampleClient) CrackTicker(msg interface{}) (*Ticker, error) {
+func (e ExampleClient) CrackTicker(msg interface{}) (*domain.Ticker, error) {
 	// TODO use websocket service to crack interface into strongly-typed ticker w/ error response
-	return &Ticker{}, nil
+	return &domain.Ticker{}, nil
 }
 
-func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *Ticker, error) {
-	ch := make(chan *Ticker)
+func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *domain.Ticker, error) {
+	ch := make(chan *domain.Ticker)
 	req := &PublicSubscriptionRequest{
 		Event: "subscribe",
 		Channel: "ticker",

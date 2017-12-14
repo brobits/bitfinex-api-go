@@ -26,12 +26,6 @@ const (
 	ChanCandles = "candles"
 )
 
-// Prefixes for available pairs
-const (
-	FundingPrefix = "f"
-	TradingPrefix = "t"
-)
-
 var (
 	ErrWSNotConnected     = fmt.Errorf("websocket connection not established")
 	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")

@@ -1,7 +1,5 @@
 package domain
 
-import ()
-
 type Ticker struct {
 	Symbol          string
 	Bid             float64

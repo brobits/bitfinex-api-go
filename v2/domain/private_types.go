@@ -142,7 +142,7 @@ type Order struct {
 
 // OrderFromRaw takes the raw list of values as returned from the websocket
 // service and tries to convert it into an Order.
-func orderFromRaw(raw []interface{}) (o Order, err error) {
+func NewOrderFromRaw(raw []interface{}) (o Order, err error) {
 	if len(raw) < 26 {
 		return o, fmt.Errorf("data slice too short for order: %#v", raw)
 	}
@@ -175,7 +175,7 @@ func orderFromRaw(raw []interface{}) (o Order, err error) {
 
 // OrderSnapshotFromRaw takes a raw list of values as returned from the websocket
 // service and tries to convert it into an OrderSnapshot.
-func orderSnapshotFromRaw(raw []interface{}) (os OrderSnapshot, err error) {
+func NewOrderSnapshotFromRaw(raw []interface{}) (os OrderSnapshot, err error) {
 	if len(raw) == 0 {
 		return
 	}
@@ -184,7 +184,7 @@ func orderSnapshotFromRaw(raw []interface{}) (os OrderSnapshot, err error) {
 	case []interface{}:
 		for _, v := range raw {
 			if l, ok := v.([]interface{}); ok {
-				o, err := orderFromRaw(l)
+				o, err := NewOrderFromRaw(l)
 				if err != nil {
 					return os, err
 				}
@@ -232,7 +232,7 @@ type Position struct {
 	Leverage             float64
 }
 
-func positionFromRaw(raw []interface{}) (o Position, err error) {
+func NewPositionFromRaw(raw []interface{}) (o Position, err error) {
 	if len(raw) < 10 {
 		return o, fmt.Errorf("data slice too short for position: %#v", raw)
 	}
@@ -258,7 +258,7 @@ type PositionNew Position
 type PositionUpdate Position
 type PositionCancel Position
 
-func positionSnapshotFromRaw(raw []interface{}) (ps PositionSnapshot, err error) {
+func NewPositionSnapshotFromRaw(raw []interface{}) (ps PositionSnapshot, err error) {
 	if len(raw) == 0 {
 		return
 	}
@@ -295,7 +295,7 @@ type Trade struct {
 	FeeCurrency string
 }
 
-func tradeFromRaw(raw []interface{}) (o Trade, err error) {
+func NewTradeFromRaw(raw []interface{}) (o Trade, err error) {
 	if len(raw) < 11 {
 		return o, fmt.Errorf("data slice too short for trade: %#v", raw)
 	}
@@ -321,7 +321,7 @@ type TradeUpdate Trade
 type TradeSnapshot []Trade
 type HistoricalTradeSnapshot TradeSnapshot
 
-func tradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
+func NewTradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 	if len(raw) == 0 {
 		return
 	}
@@ -330,7 +330,7 @@ func tradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 	case []interface{}:
 		for _, v := range raw {
 			if l, ok := v.([]interface{}); ok {
-				t, err := tradeFromRaw(l)
+				t, err := NewTradeFromRaw(l)
 				if err != nil {
 					return ts, err
 				}
@@ -356,7 +356,7 @@ type TradeExecution struct {
 	Maker      bool
 }
 
-func tradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
+func NewTradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
 	if len(raw) < 9 {
 		return o, fmt.Errorf("data slice too short for trade execution: %#v", raw)
 	}
@@ -384,7 +384,7 @@ type Wallet struct {
 	BalanceAvailable  *float64
 }
 
-func walletFromRaw(raw []interface{}) (o Wallet, err error) {
+func NewWalletFromRaw(raw []interface{}) (o Wallet, err error) {
 	if len(raw) < 5 {
 		return o, fmt.Errorf("data slice too short for wallet: %#v", raw)
 	}
@@ -403,7 +403,7 @@ func walletFromRaw(raw []interface{}) (o Wallet, err error) {
 type WalletUpdate Wallet
 type WalletSnapshot []Wallet
 
-func walletSnapshotFromRaw(raw []interface{}) (ws WalletSnapshot, err error) {
+func NewWalletSnapshotFromRaw(raw []interface{}) (ws WalletSnapshot, err error) {
 	if len(raw) == 0 {
 		return
 	}
@@ -412,7 +412,7 @@ func walletSnapshotFromRaw(raw []interface{}) (ws WalletSnapshot, err error) {
 	case []interface{}:
 		for _, v := range raw {
 			if l, ok := v.([]interface{}); ok {
-				o, err := walletFromRaw(l)
+				o, err := NewWalletFromRaw(l)
 				if err != nil {
 					return ws, err
 				}
@@ -433,7 +433,7 @@ type BalanceInfo struct {
 	Currency   string
 }
 
-func balanceInfoFromRaw(raw []interface{}) (o BalanceInfo, err error) {
+func NewBalanceInfoFromRaw(raw []interface{}) (o BalanceInfo, err error) {
 	if len(raw) < 4 {
 		return o, fmt.Errorf("data slice too short for balance info: %#v", raw)
 	}
