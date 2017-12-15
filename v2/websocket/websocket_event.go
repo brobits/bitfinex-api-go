@@ -66,7 +66,7 @@ type ConfEvent struct {
 }
 
 // onEvent handles all the event messages and connects SubID and ChannelID.
-func (b *bfxWebsocket) onEvent(msg []byte) (interface{}, error) {
+func (c Client) onEvent(msg []byte) (interface{}, error) {
 	event := &eventType{}
 	err := json.Unmarshal(msg, event)
 	if err != nil {
@@ -85,13 +85,9 @@ func (b *bfxWebsocket) onEvent(msg []byte) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		b.subMu.Lock()
-		if _, ok := b.privSubIDs[a.SubID]; ok {
-			b.privChanIDs[a.ChanID] = struct{}{}
-			delete(b.privSubIDs, a.SubID)
-		}
-		b.subMu.Unlock()
+		// TODO: should the lib track authentication?
+		// TODO: channel IDs shared across public & private endpoints?
+		c.Subscriptions.Activate(a.SubID, a.ChanID)
 		return a, nil
 	case "subscribed":
 		s := SubscribeEvent{}
@@ -99,16 +95,7 @@ func (b *bfxWebsocket) onEvent(msg []byte) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		b.subMu.Lock()
-		if info, ok := b.pubSubIDs[s.SubID]; ok {
-			b.pubChanIDs[s.ChanID] = info.req
-			b.handlersMu.Lock()
-			b.publicHandlers[s.ChanID] = info.h
-			b.handlersMu.Unlock()
-			delete(b.pubSubIDs, s.SubID)
-		}
-		b.subMu.Unlock()
+		c.Subscriptions.Activate(s.SubID, s.ChanID)
 		return s, nil
 	case "unsubscribed":
 		e = UnsubscribeEvent{}
