@@ -42,7 +42,7 @@ type Client struct {
 	timeout			int64 // read timeout
 
 	// subscription manager
-	Subscriptions
+	subscriptions Subscriptions
 	Asynchronous
 
 	// websocket shutdown signal
@@ -182,7 +182,7 @@ func (c Client) Send(ctx context.Context, msg interface{}) error {
 }
 
 func (c Client) listen(subID string) (<-chan []interface{}, error) {
-	sub, err := c.Subscriptions.LookupBySubscriptionID(subID)
+	sub, err := c.subscriptions.LookupBySubscriptionID(subID)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (c Client) listen(subID string) (<-chan []interface{}, error) {
 func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *domain.Ticker, error) {
 	ch := make(chan *domain.Ticker)
 	req := &PublicSubscriptionRequest{
-		SubID: c.Subscriptions.NextSubID(),
+		SubID: c.subscriptions.NextSubID(),
 		Event: "subscribe",
 		Channel: "ticker",
 		Symbol: symbol,

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"errors"
 	"fmt"
+	"github.com/bitfinexcom/bitfinex-api-go/utils"
 )
 
 type Subscription struct {
@@ -45,24 +46,21 @@ func (s Subscription) Close() {
 
 type Subscriptions struct {
 	lock			sync.Mutex
-	subs			int64
 
 	subsBySubID		map[string]*Subscription // subscription map indexed by subscription ID
 	subsByChanID 	map[int64]*Subscription // subscription map indexed by channel ID
 }
 
 func (s Subscriptions) NextSubID() string {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.subs++
-	return fmt.Sprintf("%d", s.subs)
+	return utils.GetNonce()
 }
 
-func (s Subscriptions) Add(sub *PublicSubscriptionRequest) {
+func (s Subscriptions) Add(sub *PublicSubscriptionRequest) *Subscription {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	subscription := newSubscription(sub)
 	s.subsBySubID[sub.SubID] = subscription
+	return subscription
 }
 
 func (s Subscriptions) RemoveByChanID(chanID int64) error {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
-	"golang.org/x/tools/go/gcimporter15/testdata"
 )
 
 type unsubscribeMsg struct {
@@ -17,7 +16,7 @@ type unsubscribeMsg struct {
 // Unsubscribe from the websocket channel with the given channel id and close
 // the associated go channel.
 func (c Client) UnsubscribeByChanID(ctx context.Context, id int64) error {
-	err := c.Subscriptions.RemoveByChanID(id)
+	err := c.subscriptions.RemoveByChanID(id)
 	if err != nil {
 		return err
 	}
@@ -30,12 +29,7 @@ func (c Client) Unsubscribe(ctx context.Context, p *PublicSubscriptionRequest) e
 	if p == nil {
 		return fmt.Errorf("PublicSubscriptionRequest cannot be nil")
 	}
-
-	for k, v := range b.pubChanIDs {
-		if v == *p {
-			return c.UnsubscribeByChanID(ctx, k)
-		}
-	}
+	c.subscriptions.RemoveBySubID(p.SubID)
 	return fmt.Errorf("could not find channel for symbol")
 }
 
@@ -60,27 +54,29 @@ type PublicSubscriptionRequest struct {
 }
 
 // Subscribe to one of the public websocket channels.
-func (c Client) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
+func (c Client) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest) (<-chan []interface{}, error) {
 	if c.ws == nil {
-		return ErrWSNotConnected
+		return nil, ErrWSNotConnected
 	} else if msg == nil {
-		return fmt.Errorf("no subscription request provided")
-	}
-
-	for _, v := range b.pubChanIDs {
-		if v == *msg {
-			return fmt.Errorf("already subscribed to the channel requested")
-		}
+		return nil, fmt.Errorf("no subscription request provided")
 	}
 
 	msg.Event = "subscribe"
-	msg.SubID = utils.GetNonce()
+	if msg.SubID == "" {
+		msg.SubID = utils.GetNonce()
+	}
 
-	b.subMu.Lock()
-	b.pubSubIDs[msg.SubID] = publicSubInfo{req: *msg, h: h}
-	b.subMu.Unlock()
+	if _, err := c.subscriptions.LookupBySubscriptionID(msg.SubID); err == nil {
+		return nil, fmt.Errorf("subscription exists for sub ID %s", msg.SubID)
+	}
 
-	return b.Send(ctx, msg)
+	sub := c.subscriptions.Add(msg)
+	err := c.Send(ctx, msg)
+	if err != nil {
+		c.subscriptions.RemoveBySubID(msg.SubID)
+		return nil, err
+	}
+	return sub.Stream(), nil
 }
 
 func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
