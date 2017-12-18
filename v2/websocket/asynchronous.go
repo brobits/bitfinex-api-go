@@ -1,34 +1,22 @@
 package websocket
 
 import (
-	"log"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"context"
 )
 
 type Asynchronous interface {
-	Send(request interface{}) (<-chan []interface{}, error)
+	Send(ctx context.Context, msg interface{}) error
+	Listen(chanID int64) <-chan []interface{}
 }
 
 type MarketData interface {
 	SubscribeTicker(symbol string) <-chan *domain.Ticker
 }
 
-type ExampleClient struct {
-	Asynchronous
-}
-
-func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *domain.Ticker, error) {
-	ch := make(chan *domain.Ticker)
-	req := &PublicSubscriptionRequest{
-		Event: "subscribe",
-		Channel: "ticker",
-		Symbol: symbol,
-	}
-	async, err := e.Asynchronous.Send(req)
-	if err != nil {
-		// propagate error
-		return nil, err
-	}
+// TODO auto subscription with connect
+/*
+	async := e.Asynchronous.Listen()
 	go func() {
 		for o := range async {
 			if o == nil {
@@ -43,9 +31,8 @@ func (e ExampleClient) SubscribeTicker(symbol string) (<-chan *domain.Ticker, er
 			ch <- &tick
 		}
 	}()
-	return ch, nil
-}
-
+ */
+/*
 func ExampleUsage() {
 	client := ExampleClient{}
 	ch, err := client.SubscribeTicker("tBTCUSD")
@@ -61,3 +48,4 @@ func ExampleUsage() {
 		// TODO: handle tick
 	}
 }
+*/

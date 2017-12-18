@@ -5,7 +5,7 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
-func (b *bfxWebsocket) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
+func (c Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
 	if len(data) < 2 {
 		return ms, fmt.Errorf("data message too short: %#v", data)
 	}
@@ -25,14 +25,14 @@ func (b *bfxWebsocket) handlePrivateDataMessage(data []interface{}) (ms interfac
 		return ms, fmt.Errorf("expected data list in third position but got %#v in %#v", data[2], data)
 	}
 
-	ms = b.convertRaw(term, list)
+	ms = c.convertRaw(term, list)
 
 	return
 }
 
 // convertRaw takes a term and the raw data attached to it to try and convert that
 // untyped list into a proper type.
-func (b *bfxWebsocket) convertRaw(term string, raw []interface{}) interface{} {
+func (c Client) convertRaw(term string, raw []interface{}) interface{} {
 	// The things you do to get proper types.
 	switch term {
 	case "bu":

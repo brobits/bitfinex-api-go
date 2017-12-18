@@ -16,6 +16,8 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/tools/go/gcimporter15/testdata"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 )
 
 // Available channels
@@ -31,71 +33,78 @@ var (
 	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")
 )
 
-// bfxWebsocket is a wrapper around a simple websocket connection, that let's us
-// manage callbacks and share a single websocket in a thread safe manner.
-// It provides a single channel to write message to.
-type bfxWebsocket struct {
-	// Bitfinex client
-	client *Client
+type Client struct {
+	ws				*websocket.Conn
+	wsLock			sync.Mutex
+	BaseURL 		string
+	TLSSkipVerify 	bool
+	isAuthenticated	bool
+	timeout			int64 // read timeout
 
-	wsMu         sync.Mutex
-	ws           *websocket.Conn
-	timeout      int64
-	webSocketURL string
+	// subscription manager
+	Subscriptions
+	Asynchronous
 
-	// TLSSkipVerify toggles if certificate verification should be skipped or not.
-	TLSSkipVerify bool
+	// websocket shutdown signal
+	shutdown		chan error
 
-	// The bitfinex API sends us untyped arrays as data, so we have to keep track
-	// of which one belongs where.
-	subMu       sync.Mutex
-	pubSubIDs   map[string]publicSubInfo
-	pubChanIDs  map[int64]PublicSubscriptionRequest // ChannelID -> SubscriptionRequest map
-	privSubIDs  map[string]struct{}
-	privChanIDs map[int64]struct{}
-
-	eventHandler handlerT
-
-	privateHandler  handlerT
-	isAuthenticated bool
-
-	handlersMu     sync.Mutex
-	publicHandlers map[int64]handlerT
-
-	done  chan struct{}
-	errMu sync.Mutex
-	err   error
+	// close signal sent to user on shutdown.  ws -> shutdown channel -> internal cleanup -> done channel
+	done			chan error
 }
 
-type handlerT func(interface{})
-
-type publicSubInfo struct {
-	req PublicSubscriptionRequest
-	h   handlerT
-}
-
-func newBfxWebsocket(c *Client, wsURL string) *bfxWebsocket {
-	b := &bfxWebsocket{
-		client:       c,
-		webSocketURL: wsURL,
+func NewClient(url string) *Client {
+	return &Client{
+		BaseURL: url,
+		shutdown: make(chan error),
+		done: make(chan error),
 	}
-	b.init()
-
-	return b
 }
 
-func (b *bfxWebsocket) Connect() error {
-	if b.ws != nil {
-		return nil // We're already connected.
+func (c Client) listenWs() {
+	for {
+		if c.ws == nil {
+			return
+		}
+		if atomic.LoadInt64(&c.timeout) != 0 {
+			c.ws.SetReadDeadline(time.Now().Add(time.Duration(c.timeout)))
+		}
+
+		select {
+		case err := <-c.shutdown:
+			// websocket termination
+			if err != nil {
+				c.done <- err
+			}
+			close(c.done)
+			return
+		default:
+		}
+
+		_, msg, err := c.ws.ReadMessage()
+		if err != nil {
+			c.close(err)
+			return
+		}
+
+		// Errors here should be non critical so we just log them.
+		err = c.handleMessage(msg)
+		if err != nil {
+			log.Printf("[WARN]: %s\n", err)
+		}
 	}
-
-	b.init()
-	return b.connect()
 }
 
-func (b *bfxWebsocket) connect() error {
-	b.wsMu.Lock()
-	defer b.wsMu.Unlock()
+func (c Client) Connect() error {
+	if c.ws != nil {
+		return nil // no op
+	}
+	// init?
+	return c.connect()
+}
+
+func (c Client) connect() error {
+	c.wsLock.Lock()
+	defer c.wsLock.Unlock()
 	var d = websocket.Dialer{
 		Subprotocols:    []string{"p1", "p2"},
 		ReadBufferSize:  1024,
@@ -103,101 +112,48 @@ func (b *bfxWebsocket) connect() error {
 		Proxy:           http.ProxyFromEnvironment,
 	}
 
-	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: b.TLSSkipVerify}
+	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify}
 
-	ws, _, err := d.Dial(b.webSocketURL, nil)
+	ws, _, err := d.Dial(c.BaseURL, nil)
 	if err != nil {
 		return err
 	}
 
-	b.ws = ws
-
-	go b.receiver()
-
+	c.ws = ws
+	go c.listenWs()
 	return nil
-}
-
-func (b *bfxWebsocket) init() {
-	b.privSubIDs = map[string]struct{}{}
-	b.pubSubIDs = map[string]publicSubInfo{}
-	b.pubChanIDs = map[int64]PublicSubscriptionRequest{}
-	b.publicHandlers = map[int64]handlerT{}
-	b.privChanIDs = map[int64]struct{}{}
-	b.done = make(chan struct{})
-}
-
-func (b *bfxWebsocket) receiver() {
-	for {
-		if b.ws == nil {
-			return
-		}
-		if atomic.LoadInt64(&b.timeout) != 0 {
-			b.ws.SetReadDeadline(time.Now().Add(time.Duration(b.timeout)))
-		}
-
-		select {
-		case <-b.Done():
-			return
-		default:
-		}
-
-		_, msg, err := b.ws.ReadMessage()
-		if err != nil {
-			b.close(err)
-			return
-		}
-
-		// Errors here should be non critical so we just log them.
-		err = b.handleMessage(msg)
-		if err != nil {
-			log.Printf("[WARN]: %s\n", err)
-		}
-	}
 }
 
 // Done returns a channel that will be closed if the underlying websocket
 // connection gets closed.
-func (b *bfxWebsocket) Done() <-chan struct{} { return b.done }
+func (c Client) Done() <-chan error { return c.done }
 
-// Err returns an error if the done channel was closed due to an error.
-func (b *bfxWebsocket) Err() error {
-	b.errMu.Lock()
-	defer b.errMu.Unlock()
-	return b.err
-}
-
-func (b *bfxWebsocket) close(e error) {
-	b.wsMu.Lock()
-	if b.ws != nil {
-		if err := b.ws.Close(); err != nil {
+func (c Client) close(e error) {
+	c.wsLock.Lock()
+	if c.ws != nil {
+		if err := c.ws.Close(); err != nil {
 			log.Printf("[INFO]: error closing websocket: %s", err)
 		}
-		b.ws = nil
+		c.ws = nil
 	}
-	b.wsMu.Unlock()
+	c.wsLock.Unlock()
 
-	b.errMu.Lock()
-	b.err = e
-	b.errMu.Unlock()
+	// send error to shutdown channel
+	c.shutdown <- e
 
-	select { // Do nothing if we're already closed.
-	default:
-	case <-b.done:
-		return
-	}
-
-	close(b.done)
+	// close channel
+	close(c.shutdown)
 }
 
-func (b *bfxWebsocket) Close() {
-	b.close(nil)
+func (c Client) Close() {
+	c.close(nil)
 }
 
 // Send marshals the given interface and then sends it to the API. This method
 // can block so specify a context with timeout if you don't want to wait for too
 // long.
-func (b *bfxWebsocket) Send(ctx context.Context, msg interface{}) error {
-	if b.ws == nil {
+func (c Client) Send(ctx context.Context, msg interface{}) error {
+	if c.ws == nil {
 		return ErrWSNotConnected
 	}
 
@@ -209,23 +165,67 @@ func (b *bfxWebsocket) Send(ctx context.Context, msg interface{}) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-b.Done():
-		return fmt.Errorf("websocket closed: ", b.Err())
+	case <-c.Done():
+		return fmt.Errorf("websocket closed: ", "error msg") // TODO pass error msg
 	default:
 	}
 
-	b.wsMu.Lock()
-	defer b.wsMu.Unlock()
-	err = b.ws.WriteMessage(websocket.TextMessage, bs)
-	if err != nil { // If WriteMessage returns an error, it's permanent.
-		b.close(err)
+	c.wsLock.Lock()
+	defer c.wsLock.Unlock()
+	err = c.ws.WriteMessage(websocket.TextMessage, bs)
+	if err != nil {
+		c.close(err)
 		return err
 	}
 
 	return nil
 }
 
-func (b *bfxWebsocket) handleMessage(msg []byte) error {
+func (c Client) listen(subID string) (<-chan []interface{}, error) {
+	sub, err := c.Subscriptions.LookupBySubscriptionID(subID)
+	if err != nil {
+		return nil, err
+	}
+	return sub.Stream(), nil
+}
+
+func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *domain.Ticker, error) {
+	ch := make(chan *domain.Ticker)
+	req := &PublicSubscriptionRequest{
+		SubID: c.Subscriptions.NextSubID(),
+		Event: "subscribe",
+		Channel: "ticker",
+		Symbol: symbol,
+	}
+	err := c.Asynchronous.Send(ctx, req)
+	if err != nil {
+		// propagate send error
+		return nil, err
+	}
+	pipe, err := c.listen(req.SubID)
+	if err != nil {
+		// propagate no sub error
+		return nil, err
+	}
+	go func() {
+		for m := range pipe {
+			if m == nil {
+				// channel closed, propagate EOT
+				close(ch)
+				break
+			}
+			tick, err := domain.NewTickerFromRaw(m)
+			if err != nil {
+				log.Printf("could not convert ticker message: %s", err.Error())
+				continue
+			}
+			ch <- &tick
+		}
+	}()
+	return ch, nil
+}
+
+func (c Client) handleMessage(msg []byte) error {
 	t := bytes.TrimLeftFunc(msg, unicode.IsSpace)
 	if bytes.HasPrefix(t, []byte("[")) { // Data messages are just arrays of values.
 		var raw []interface{}
@@ -340,6 +340,6 @@ func (b *bfxWebsocket) RemovePrivateHandler() error {
 }
 
 // SetReadTimeout sets the read timeout for the underlying websocket connections.
-func (b *bfxWebsocket) SetReadTimeout(t time.Duration) {
-	atomic.StoreInt64(&b.timeout, t.Nanoseconds())
+func (c Client) SetReadTimeout(t time.Duration) {
+	atomic.StoreInt64(&c.timeout, t.Nanoseconds())
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"golang.org/x/tools/go/gcimporter15/testdata"
 )
 
 type unsubscribeMsg struct {
@@ -15,39 +16,31 @@ type unsubscribeMsg struct {
 
 // Unsubscribe from the websocket channel with the given channel id and close
 // the associated go channel.
-func (b *bfxWebsocket) UnsubscribeByChanID(ctx context.Context, id int64) error {
-	b.subMu.Lock()
-	if _, ok := b.pubChanIDs[id]; ok {
-		delete(b.pubChanIDs, id)
+func (c Client) UnsubscribeByChanID(ctx context.Context, id int64) error {
+	err := c.Subscriptions.RemoveByChanID(id)
+	if err != nil {
+		return err
 	}
-	b.subMu.Unlock()
-
-	b.handlersMu.Lock()
-	if _, ok := b.publicHandlers[id]; ok {
-		delete(b.publicHandlers, id)
-	}
-	b.handlersMu.Unlock()
-
-	return b.sendUnsubscribeMessage(ctx, id)
+	return c.sendUnsubscribeMessage(ctx, id)
 }
 
 // Unsubscribe takes an PublicSubscriptionRequest and tries to unsubscribe from the
 // channel described by that request.
-func (b *bfxWebsocket) Unsubscribe(ctx context.Context, p *PublicSubscriptionRequest) error {
+func (c Client) Unsubscribe(ctx context.Context, p *PublicSubscriptionRequest) error {
 	if p == nil {
 		return fmt.Errorf("PublicSubscriptionRequest cannot be nil")
 	}
 
 	for k, v := range b.pubChanIDs {
 		if v == *p {
-			return b.UnsubscribeByChanID(ctx, k)
+			return c.UnsubscribeByChanID(ctx, k)
 		}
 	}
 	return fmt.Errorf("could not find channel for symbol")
 }
 
-func (b *bfxWebsocket) sendUnsubscribeMessage(ctx context.Context, id int64) error {
-	return b.Send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
+func (c Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
+	return c.Send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
 }
 
 // PublicSubscriptionRequest is used to subscribe to one of the public websocket
@@ -67,8 +60,8 @@ type PublicSubscriptionRequest struct {
 }
 
 // Subscribe to one of the public websocket channels.
-func (b *bfxWebsocket) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
-	if b.ws == nil {
+func (c Client) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
+	if c.ws == nil {
 		return ErrWSNotConnected
 	} else if msg == nil {
 		return fmt.Errorf("no subscription request provided")
@@ -90,7 +83,7 @@ func (b *bfxWebsocket) Subscribe(ctx context.Context, msg *PublicSubscriptionReq
 	return b.Send(ctx, msg)
 }
 
-func (b *bfxWebsocket) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
+func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
 	switch len(raw) {
 	case 2:
 		// [ChanID, [Data]] or [ChanID, "hb"]
@@ -99,7 +92,7 @@ func (b *bfxWebsocket) handlePublicDataMessage(raw []interface{}) (interface{}, 
 		// Simple update/snapshot for ticker, books, raw books and candles.
 		switch fp := raw[1].(type) {
 		case []interface{}:
-			return b.processDataSlice(fp)
+			return c.processDataSlice(fp)
 		case string: // This should be a heartbeat.
 			return domain.Heartbeat{}, nil
 		}
@@ -108,14 +101,14 @@ func (b *bfxWebsocket) handlePublicDataMessage(raw []interface{}) (interface{}, 
 		// Data can be either []float64 or [][]float64, where the former should be
 		// representing an update and the latter a snapshot.
 		if fp, ok := raw[2].([]interface{}); ok {
-			return b.processDataSlice(fp)
+			return c.processDataSlice(fp)
 		}
 	}
 
 	return nil, fmt.Errorf("unexpected data message: %#v", raw)
 }
 
-func (b *bfxWebsocket) processDataSlice(data []interface{}) (interface{}, error) {
+func (c Client) processDataSlice(data []interface{}) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}

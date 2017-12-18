@@ -85,7 +85,6 @@ func (c Client) onEvent(msg []byte) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		// TODO: should the lib track authentication?
 		// TODO: channel IDs shared across public & private endpoints?
 		c.Subscriptions.Activate(a.SubID, a.ChanID)
 		return a, nil
@@ -98,7 +97,12 @@ func (c Client) onEvent(msg []byte) (interface{}, error) {
 		c.Subscriptions.Activate(s.SubID, s.ChanID)
 		return s, nil
 	case "unsubscribed":
-		e = UnsubscribeEvent{}
+		s := UnsubscribeEvent{}
+		err = json.Unmarshal(msg, &s)
+		if err != nil {
+			return nil, err
+		}
+		c.Subscriptions.RemoveByChanID(s.ChanID)
 	case "error":
 		e = ErrorEvent{}
 	case "conf":
