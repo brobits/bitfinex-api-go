@@ -65,52 +65,89 @@ type ConfEvent struct {
 	Flags int `json:"flags"`
 }
 
+type EventListener interface {
+	onInfo(e InfoEvent)
+	onAuth(e AuthEvent)
+	onSubscribe(e SubscribeEvent)
+	onUnsubscribe(e UnsubscribeEvent)
+	onError(e ErrorEvent)
+	onConf(e ConfEvent)
+	onRawEvent(e interface{})
+}
+
+func (c Client) RegisterEventListener(listener EventListener) {
+	c.eventListener = listener
+}
+
 // onEvent handles all the event messages and connects SubID and ChannelID.
-func (c Client) onEvent(msg []byte) (interface{}, error) {
+func (c Client) handleEvent(msg []byte) error {
 	event := &eventType{}
 	err := json.Unmarshal(msg, event)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var e interface{}
 	switch event.Event {
 	case "info":
-		e = InfoEvent{}
+		i := InfoEvent{}
+		// TODO e->i
+		if c.eventListener != nil {
+			c.eventListener.onInfo(i)
+		}
 	case "auth":
-		// TODO: should the lib itself keep track of the authentication
-		// 			 status?
 		a := AuthEvent{}
 		err = json.Unmarshal(msg, &a)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		// TODO: channel IDs shared across public & private endpoints?
-		c.Subscriptions.Activate(a.SubID, a.ChanID)
-		return a, nil
+		c.subscriptions.Activate(a.SubID, a.ChanID)
+		c.Authentication = SuccessfulAuthentication
+		if c.eventListener != nil {
+			c.eventListener.onAuth(a)
+		}
+		return nil
 	case "subscribed":
 		s := SubscribeEvent{}
 		err = json.Unmarshal(msg, &s)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		c.Subscriptions.Activate(s.SubID, s.ChanID)
-		return s, nil
+		c.subscriptions.Activate(s.SubID, s.ChanID)
+		if c.eventListener != nil {
+			c.eventListener.onSubscribe(s)
+		}
+		return nil
 	case "unsubscribed":
 		s := UnsubscribeEvent{}
 		err = json.Unmarshal(msg, &s)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		c.Subscriptions.RemoveByChanID(s.ChanID)
+		c.subscriptions.RemoveByChanID(s.ChanID)
+		if c.eventListener != nil {
+			c.eventListener.onUnsubscribe(s)
+		}
 	case "error":
-		e = ErrorEvent{}
+		er := ErrorEvent{}
+		// TODO e->er
+		if c.eventListener != nil {
+			c.eventListener.onError(er)
+		}
 	case "conf":
-		e = ConfEvent{}
+		ec := ConfEvent{}
+		// TODO e->ec
+		if c.eventListener != nil {
+			c.eventListener.onConf(ec)
+		}
 	default:
-		return nil, fmt.Errorf("unknown event: %s", msg) // TODO: or just log?
+		return fmt.Errorf("unknown event: %s", msg) // TODO: or just log?
 	}
 
 	err = json.Unmarshal(msg, &e)
-	return e, err
+	if err != nil && c.eventListener != nil {
+		c.eventListener.onRawEvent(e)
+	}
+
+	return err
 }

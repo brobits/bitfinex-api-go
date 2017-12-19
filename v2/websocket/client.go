@@ -16,8 +16,10 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 
 	"github.com/gorilla/websocket"
-	"golang.org/x/tools/go/gcimporter15/testdata"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"crypto/hmac"
+	"crypto/sha512"
+	"encoding/hex"
 )
 
 // Available channels
@@ -33,13 +35,34 @@ var (
 	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")
 )
 
+type authState byte
+type AuthState authState // prevent user construction of authStates
+
+const (
+	NoAuthentication AuthState = 0
+	PendingAuthentication AuthState = 1
+	SuccessfulAuthentication AuthState = 2
+	RejectedAuthentication AuthState = 3
+)
+
+type Asynchronous interface {
+	Send(ctx context.Context, msg interface{}) error
+	Listen(chanID int64) <-chan []interface{}
+}
+
+type MarketData interface {
+	SubscribeTicker(symbol string) <-chan *domain.Ticker
+}
+
 type Client struct {
 	ws				*websocket.Conn
 	wsLock			sync.Mutex
 	BaseURL 		string
 	TLSSkipVerify 	bool
-	isAuthenticated	bool
 	timeout			int64 // read timeout
+	APIKey			string
+	APISecret		string
+	Authentication	AuthState
 
 	// subscription manager
 	subscriptions Subscriptions
@@ -50,6 +73,15 @@ type Client struct {
 
 	// close signal sent to user on shutdown.  ws -> shutdown channel -> internal cleanup -> done channel
 	done			chan error
+
+	// event forwarding
+	eventListener EventListener
+}
+
+func (c Client) sign(msg string) string {
+	sig := hmac.New(sha512.New384, []byte(c.APISecret))
+	sig.Write([]byte(msg))
+	return hex.EncodeToString(sig.Sum(nil))
 }
 
 func NewClient(url string) *Client {
@@ -57,6 +89,7 @@ func NewClient(url string) *Client {
 		BaseURL: url,
 		shutdown: make(chan error),
 		done: make(chan error),
+		Authentication: NoAuthentication,
 	}
 }
 
@@ -191,7 +224,7 @@ func (c Client) listen(subID string) (<-chan []interface{}, error) {
 
 func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *domain.Ticker, error) {
 	ch := make(chan *domain.Ticker)
-	req := &PublicSubscriptionRequest{
+	req := &subscriptionRequest{
 		SubID: c.subscriptions.NextSubID(),
 		Event: "subscribe",
 		Channel: "ticker",
@@ -227,115 +260,95 @@ func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *dom
 
 func (c Client) handleMessage(msg []byte) error {
 	t := bytes.TrimLeftFunc(msg, unicode.IsSpace)
-	if bytes.HasPrefix(t, []byte("[")) { // Data messages are just arrays of values.
-		var raw []interface{}
-		err := json.Unmarshal(msg, &raw)
-		if err != nil {
-			return err
-		} else if len(raw) < 2 {
-			return nil
-		}
-
-		chanID, ok := raw[0].(float64)
-		if !ok {
-			return fmt.Errorf("expected message to start with a channel id but got %#v instead", raw[0])
-		}
-
-		if _, has := b.privChanIDs[int64(chanID)]; has {
-			td, err := b.handlePrivateDataMessage(raw)
-			if err != nil {
-				return err
-			} else if td == nil {
-				return nil
-			}
-			if b.privateHandler != nil {
-				go b.privateHandler(td)
-				return nil
-			}
-		} else if _, has := b.pubChanIDs[int64(chanID)]; has {
-			td, err := b.handlePublicDataMessage(raw)
-			if err != nil {
-				return err
-			} else if td == nil {
-				return nil
-			}
-			if h, has := b.publicHandlers[int64(chanID)]; has {
-				go h(td)
-				return nil
-			}
-		} else {
-			// TODO: log unhandled message?
-		}
-	} else if bytes.HasPrefix(t, []byte("{")) { // Events are encoded as objects.
-		ev, err := b.onEvent(msg)
-		if err != nil {
-			return err
-		}
-		if b.eventHandler != nil {
-			go b.eventHandler(ev)
-		}
+	err := error(nil)
+	// either a channel data array or an event object, raw json encoding
+	if bytes.HasPrefix(t, []byte("[")) {
+		err = c.handleChannel(msg)
+	} else if bytes.HasPrefix(t, []byte("{")) {
+		err = c.handleEvent(msg)
 	} else {
 		return fmt.Errorf("unexpected message: %s", msg)
 	}
-
-	return nil
+	return err
 }
 
-type subscriptionRequest struct {
-	Event       string   `json:"event"`
-	APIKey      string   `json:"apiKey"`
-	AuthSig     string   `json:"authSig"`
-	AuthPayload string   `json:"authPayload"`
-	AuthNonce   string   `json:"authNonce"`
-	Filter      []string `json:"filter"`
-	SubID       string   `json:"subId"`
+// Unsubscribe takes an PublicSubscriptionRequest and tries to unsubscribe from the
+// channel described by that request.
+/*
+func (c Client) Unsubscribe(ctx context.Context, p *PublicSubscriptionRequest) error {
+	if p == nil {
+		return fmt.Errorf("PublicSubscriptionRequest cannot be nil")
+	}
+	c.subscriptions.RemoveBySubID(p.SubID)
+	return fmt.Errorf("could not find channel for symbol")
+}
+*/
+
+func (c Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
+	return c.Send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
+}
+
+/*
+// Subscribe to one of the public websocket channels.
+func (c Client) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest) (<-chan []interface{}, error) {
+	if c.ws == nil {
+		return nil, ErrWSNotConnected
+	} else if msg == nil {
+		return nil, fmt.Errorf("no subscription request provided")
+	}
+
+	msg.Event = "subscribe"
+	if msg.SubID == "" {
+		msg.SubID = utils.GetNonce()
+	}
+
+	if _, err := c.subscriptions.LookupBySubscriptionID(msg.SubID); err == nil {
+		return nil, fmt.Errorf("subscription exists for sub ID %s", msg.SubID)
+	}
+
+	sub := c.subscriptions.Add(msg)
+	err := c.Send(ctx, msg)
+	if err != nil {
+		c.subscriptions.RemoveBySubID(msg.SubID)
+		return nil, err
+	}
+	return sub.Stream(), nil
+}
+*/
+
+// Unsubscribe from the websocket channel with the given channel id and close
+// the associated go channel.
+func (c Client) UnsubscribeByChanID(ctx context.Context, id int64) error {
+	err := c.subscriptions.RemoveByChanID(id)
+	if err != nil {
+		return err
+	}
+	return c.sendUnsubscribeMessage(ctx, id)
 }
 
 // Authenticate creates the payload for the authentication request and sends it
 // to the API. The filters will be applied to the authenticated channel, i.e.
 // only subscribe to the filtered messages.
-func (b *bfxWebsocket) Authenticate(ctx context.Context, filter ...string) error {
+func (c Client) Authenticate(ctx context.Context, filter ...string) error {
 	nonce := utils.GetNonce()
+
 	payload := "AUTH" + nonce
 	s := &subscriptionRequest{
 		Event:       "auth",
-		APIKey:      b.client.APIKey,
-		AuthSig:     b.client.sign(payload),
+		APIKey:      c.APIKey,
+		AuthSig:     c.sign(payload),
 		AuthPayload: payload,
 		AuthNonce:   nonce,
 		Filter:      filter,
 		SubID:       nonce,
 	}
+	c.subscriptions.Add(s)
 
-	b.subMu.Lock()
-	b.privSubIDs[nonce] = struct{}{}
-	b.subMu.Unlock()
-
-	if err := b.Send(ctx, s); err != nil {
+	if err := c.Send(ctx, s); err != nil {
 		return err
 	}
-	b.isAuthenticated = true
+	c.Authentication = PendingAuthentication
 
-	return nil
-}
-
-func (b *bfxWebsocket) AttachEventHandler(f handlerT) error {
-	b.eventHandler = f
-	return nil
-}
-
-func (b *bfxWebsocket) AttachPrivateHandler(f handlerT) error {
-	b.privateHandler = f
-	return nil
-}
-
-func (b *bfxWebsocket) RemoveEventHandler() error {
-	b.eventHandler = nil
-	return nil
-}
-
-func (b *bfxWebsocket) RemovePrivateHandler() error {
-	b.privateHandler = nil
 	return nil
 }
 
@@ -343,3 +356,39 @@ func (b *bfxWebsocket) RemovePrivateHandler() error {
 func (c Client) SetReadTimeout(t time.Duration) {
 	atomic.StoreInt64(&c.timeout, t.Nanoseconds())
 }
+
+// TODO auto subscription with connect
+/*
+	async := e.Asynchronous.Listen()
+	go func() {
+		for o := range async {
+			if o == nil {
+				// channel closed, propagate EOT
+				close(ch)
+			}
+			tick, err := domain.NewTickerFromRaw(o)
+			if err != nil {
+				log.Printf("could not crack message: %s", err.Error())
+				continue
+			}
+			ch <- &tick
+		}
+	}()
+ */
+/*
+func ExampleUsage() {
+	client := ExampleClient{}
+	ch, err := client.SubscribeTicker("tBTCUSD")
+	if err != nil {
+		// error subscribing
+		return
+	}
+	for tick := range ch {
+		if tick == nil {
+			// channel closed
+			return
+		}
+		// TODO: handle tick
+	}
+}
+*/
