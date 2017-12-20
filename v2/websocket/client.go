@@ -30,6 +30,12 @@ const (
 	ChanCandles = "candles"
 )
 
+// Events
+const (
+	EventSubscribe 		= "subscribe"
+	EventUnsubscribe 	= "unsubscribe"
+)
+
 var (
 	ErrWSNotConnected     = fmt.Errorf("websocket connection not established")
 	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")
@@ -65,8 +71,9 @@ type Client struct {
 	Authentication	AuthState
 
 	// subscription manager
-	subscriptions Subscriptions
+	subscriptions 	Subscriptions
 	Asynchronous
+	factories		map[string]messageFactory
 
 	// websocket shutdown signal
 	shutdown		chan error
@@ -84,13 +91,22 @@ func (c Client) sign(msg string) string {
 	return hex.EncodeToString(sig.Sum(nil))
 }
 
+func (c Client) registerFactory(channel string, factory messageFactory) {
+	c.factories[channel] = factory
+}
+
 func NewClient(url string) *Client {
-	return &Client{
+	c := &Client{
 		BaseURL: url,
 		shutdown: make(chan error),
 		done: make(chan error),
 		Authentication: NoAuthentication,
+		factories: make(map[string]messageFactory),
 	}
+	c.registerFactory(ChanTicker, func(raw []interface{}) (msg interface{}, err error) {
+		return domain.NewTickerFromRaw(raw)
+	})
+	return c
 }
 
 func (c Client) listenWs() {
@@ -214,7 +230,7 @@ func (c Client) Send(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func (c Client) listen(subID string) (<-chan []interface{}, error) {
+func (c Client) listen(subID string) (<-chan interface{}, error) {
 	sub, err := c.subscriptions.LookupBySubscriptionID(subID)
 	if err != nil {
 		return nil, err
@@ -226,8 +242,8 @@ func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *dom
 	ch := make(chan *domain.Ticker)
 	req := &subscriptionRequest{
 		SubID: c.subscriptions.NextSubID(),
-		Event: "subscribe",
-		Channel: "ticker",
+		Event: EventSubscribe,
+		Channel: ChanTicker,
 		Symbol: symbol,
 	}
 	err := c.Asynchronous.Send(ctx, req)
@@ -247,12 +263,14 @@ func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *dom
 				close(ch)
 				break
 			}
+			/*
 			tick, err := domain.NewTickerFromRaw(m)
 			if err != nil {
 				log.Printf("could not convert ticker message: %s", err.Error())
 				continue
 			}
 			ch <- &tick
+			*/
 		}
 	}()
 	return ch, nil

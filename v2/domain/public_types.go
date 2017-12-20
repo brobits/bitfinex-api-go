@@ -35,8 +35,7 @@ func NewTickerFromRaw(raw []interface{}) (t Ticker, err error) {
 		return t, fmt.Errorf("data slice too short for ticker: %#v", raw)
 	}
 
-	t = Ticker{
-		/*
+	t = Ticker{/*
 		ID:            int64(f64ValOrZero(raw[0])),
 		GID:           int64(f64ValOrZero(raw[1])),
 		CID:           int64(f64ValOrZero(raw[2])),

@@ -21,12 +21,11 @@ func (c Client) handleChannel(msg []byte) error {
 	}
 
 	chanID := int64(chID)
-	_, err = c.subscriptions.LookupByChannelID(chanID)
+	sub, err := c.subscriptions.LookupByChannelID(chanID)
 	if err != nil {
 		// no subscribed channel for message
 		return err
 	}
-	// TODO use subscription from channel ID lookup below
 
 	// public msg: [ChanID, [Data]]
 	// hb (both): [ChanID, "hb"]
@@ -42,12 +41,12 @@ func (c Client) handleChannel(msg []byte) error {
 			// 'private' data
 			if len(raw) > 2 {
 				if arr, ok := raw[2].([]interface{}); ok {
-					_, err := c.handlePrivateDataMessage(arr)
+					obj, err := c.handlePrivateDataMessage(arr)
 					if err != nil {
 						return err
 					}
-					// TODO write private data message strongly typed object to subscription channel
-					//sub.Publish(obj)
+					// private data is returned as strongly typed data, publish directly
+					sub.Publish(obj)
 				}
 			}
 		}
@@ -55,19 +54,30 @@ func (c Client) handleChannel(msg []byte) error {
 		// unauthenticated data slice
 		// 'data' is data slice
 		// 'public' data
-		_, err := c.processDataSlice(data)
+		// returns []interface{} (which is really [][]float64)
+		obj, err := c.processDataSlice(data)
 		if err != nil {
 			return err
 		}
-		//sub.Publish(obj)
-		// TODO route data slice object to subscription channel
+		// public data is returned as raw interface arrays, use a factory to convert to raw type & publish
+		if factory, ok := c.factories[sub.Request.Channel]; ok {
+			msg, err := factory(obj)
+			if err != nil {
+				// factory error
+				return err
+			}
+			sub.Publish(msg)
+		} else {
+			// factory lookup error
+			return fmt.Errorf("could not find public factory for %s channel", sub.Request.Channel)
+		}
 	}
 
 	return nil
 }
 
 func (c Client) handleHeartbeat() {
-	// TODO
+	// TODO internal heartbeat timeout thread?
 }
 
 type unsubscribeMsg struct {
@@ -101,7 +111,7 @@ func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) 
 	return nil, fmt.Errorf("unexpected data message: %#v", raw)
 }
 
-func (c Client) processDataSlice(data []interface{}) (interface{}, error) {
+func (c Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}
@@ -130,7 +140,12 @@ func (c Client) processDataSlice(data []interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}
 
-	return items, nil
+	// cast from [][]float64 to []interface{}
+	cast := make([]interface{}, len(items))
+	for i, v := range items {
+		cast[i] = v
+	}
+	return cast, nil
 }
 
 // public msg: [ChanID, [Data]]

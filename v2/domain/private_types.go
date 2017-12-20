@@ -815,7 +815,7 @@ func NewFundingLoanSnapshotFromRaw(raw []interface{}) (fls FundingLoanSnapshot, 
 	case []interface{}:
 		for _, v := range raw {
 			if l, ok := v.([]interface{}); ok {
-				o, err := loanFromRaw(l)
+				o, err := NewLoanFromRaw(l)
 				if err != nil {
 					return fls, err
 				}

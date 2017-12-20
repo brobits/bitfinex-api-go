@@ -33,19 +33,21 @@ type unsubscribeRequest struct {
 	ChanID int64  `json:"chanId"`
 }
 
-type subscription struct {
-	ChanID		int64
-	pending		bool
+type messageFactory func(raw []interface{}) (interface{}, error)
 
-	Request 	*subscriptionRequest
-	pump 		chan []interface{}
+type subscription struct {
+	ChanID			int64
+	pending			bool
+
+	Request 		*subscriptionRequest
+	pump 			chan interface{}
 }
 
 func newSubscription(request *subscriptionRequest) *subscription {
 	return &subscription{
 		Request: request,
 		pending: true,
-		pump: make(chan []interface{}),
+		pump: make(chan interface{}),
 	}
 }
 
@@ -54,11 +56,11 @@ func (s subscription) SubID() string {
 }
 
 // receiver only
-func (s subscription) Stream() <-chan []interface{} {
+func (s subscription) Stream() <-chan interface{} {
 	return s.pump
 }
 
-func (s subscription) Publish(msg []interface{}) {
+func (s subscription) Publish(msg interface{}) {
 	s.pump <- msg
 }
 
