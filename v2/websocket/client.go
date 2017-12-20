@@ -16,11 +16,13 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 
 	"github.com/gorilla/websocket"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
+
+var productionBaseURL = "wss://api.bitfinex.com/ws/2"
 
 // Available channels
 const (
@@ -56,18 +58,14 @@ type Asynchronous interface {
 	Listen(chanID int64) <-chan []interface{}
 }
 
-type MarketData interface {
-	SubscribeTicker(symbol string) <-chan *domain.Ticker
-}
-
 type Client struct {
 	ws				*websocket.Conn
 	wsLock			sync.Mutex
 	BaseURL 		string
 	TLSSkipVerify 	bool
 	timeout			int64 // read timeout
-	APIKey			string
-	APISecret		string
+	apiKey			string
+	apiSecret		string
 	Authentication	AuthState
 
 	// subscription manager
@@ -85,8 +83,18 @@ type Client struct {
 	eventListener EventListener
 }
 
+func (c Client) AttachEventListener(listener EventListener) {
+	c.eventListener = listener
+}
+
+func (c Client) Credentials(key string, secret string) *Client {
+	c.apiKey = key
+	c.apiSecret = secret
+	return &c
+}
+
 func (c Client) sign(msg string) string {
-	sig := hmac.New(sha512.New384, []byte(c.APISecret))
+	sig := hmac.New(sha512.New384, []byte(c.apiSecret))
 	sig.Write([]byte(msg))
 	return hex.EncodeToString(sig.Sum(nil))
 }
@@ -95,7 +103,7 @@ func (c Client) registerFactory(channel string, factory messageFactory) {
 	c.factories[channel] = factory
 }
 
-func NewClient(url string) *Client {
+func NewClientWithUrl(url string) *Client {
 	c := &Client{
 		BaseURL: url,
 		shutdown: make(chan error),
@@ -104,9 +112,13 @@ func NewClient(url string) *Client {
 		factories: make(map[string]messageFactory),
 	}
 	c.registerFactory(ChanTicker, func(raw []interface{}) (msg interface{}, err error) {
-		return domain.NewTickerFromRaw(raw)
+		return bitfinex.NewTickerFromRaw(raw)
 	})
 	return c
+}
+
+func NewClient() *Client {
+	return NewClientWithUrl(productionBaseURL)
 }
 
 func (c Client) listenWs() {
@@ -238,44 +250,6 @@ func (c Client) listen(subID string) (<-chan interface{}, error) {
 	return sub.Stream(), nil
 }
 
-func (c Client) SubscribeTicker(ctx context.Context, symbol string) (<-chan *domain.Ticker, error) {
-	ch := make(chan *domain.Ticker)
-	req := &subscriptionRequest{
-		SubID: c.subscriptions.NextSubID(),
-		Event: EventSubscribe,
-		Channel: ChanTicker,
-		Symbol: symbol,
-	}
-	err := c.Asynchronous.Send(ctx, req)
-	if err != nil {
-		// propagate send error
-		return nil, err
-	}
-	pipe, err := c.listen(req.SubID)
-	if err != nil {
-		// propagate no sub error
-		return nil, err
-	}
-	go func() {
-		for m := range pipe {
-			if m == nil {
-				// channel closed, propagate EOT
-				close(ch)
-				break
-			}
-			/*
-			tick, err := domain.NewTickerFromRaw(m)
-			if err != nil {
-				log.Printf("could not convert ticker message: %s", err.Error())
-				continue
-			}
-			ch <- &tick
-			*/
-		}
-	}()
-	return ch, nil
-}
-
 func (c Client) handleMessage(msg []byte) error {
 	t := bytes.TrimLeftFunc(msg, unicode.IsSpace)
 	err := error(nil)
@@ -353,7 +327,7 @@ func (c Client) Authenticate(ctx context.Context, filter ...string) error {
 	payload := "AUTH" + nonce
 	s := &subscriptionRequest{
 		Event:       "auth",
-		APIKey:      c.APIKey,
+		APIKey:      c.apiKey,
 		AuthSig:     c.sign(payload),
 		AuthPayload: payload,
 		AuthNonce:   nonce,
@@ -384,7 +358,7 @@ func (c Client) SetReadTimeout(t time.Duration) {
 				// channel closed, propagate EOT
 				close(ch)
 			}
-			tick, err := domain.NewTickerFromRaw(o)
+			tick, err := bitfinex.NewTickerFromRaw(o)
 			if err != nil {
 				log.Printf("could not crack message: %s", err.Error())
 				continue

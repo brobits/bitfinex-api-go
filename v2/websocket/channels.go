@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"fmt"
 	"encoding/json"
 )
@@ -97,7 +97,7 @@ func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) 
 		case []interface{}:
 			return c.processDataSlice(fp)
 		case string: // This should be a heartbeat.
-			return domain.Heartbeat{}, nil
+			return bitfinex.Heartbeat{}, nil
 		}
 	case 3:
 		// [ChanID, MsgType, [Data]]
@@ -121,7 +121,7 @@ func (c Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 	case []interface{}: // [][]float64
 		for _, e := range data {
 			if s, ok := e.([]interface{}); ok {
-				item, err := domain.F64Slice(s)
+				item, err := bitfinex.F64Slice(s)
 				if err != nil {
 					return nil, err
 				}
@@ -131,7 +131,7 @@ func (c Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 			}
 		}
 	case float64: // []float64
-		item, err := domain.F64Slice(data)
+		item, err := bitfinex.F64Slice(data)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +163,7 @@ func (c Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, er
 
 	if len(data) == 2 || term == "hb" { // Heartbeat
 		// TODO: Consider adding a switch to enable/disable passing these along.
-		return domain.Heartbeat{}, nil
+		return bitfinex.Heartbeat{}, nil
 	}
 
 	list, ok := data[2].([]interface{})
@@ -182,194 +182,194 @@ func (c Client) convertRaw(term string, raw []interface{}) interface{} {
 	// The things you do to get proper types.
 	switch term {
 	case "bu":
-		o, err := domain.NewBalanceInfoFromRaw(raw)
+		o, err := bitfinex.NewBalanceInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.BalanceUpdate(o)
+		return bitfinex.BalanceUpdate(o)
 	case "ps":
-		o, err := domain.NewPositionSnapshotFromRaw(raw)
+		o, err := bitfinex.NewPositionSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "pn":
-		o, err := domain.NewPositionFromRaw(raw)
+		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.PositionNew(o)
+		return bitfinex.PositionNew(o)
 	case "pu":
-		o, err := domain.NewPositionFromRaw(raw)
+		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.PositionUpdate(o)
+		return bitfinex.PositionUpdate(o)
 	case "pc":
-		o, err := domain.NewPositionFromRaw(raw)
+		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.PositionCancel(o)
+		return bitfinex.PositionCancel(o)
 	case "ws":
-		o, err := domain.NewWalletSnapshotFromRaw(raw)
+		o, err := bitfinex.NewWalletSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "wu":
-		o, err := domain.NewWalletFromRaw(raw)
+		o, err := bitfinex.NewWalletFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.WalletUpdate(o)
+		return bitfinex.WalletUpdate(o)
 	case "os":
-		o, err := domain.NewOrderSnapshotFromRaw(raw)
+		o, err := bitfinex.NewOrderSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "on":
-		o, err := domain.NewOrderFromRaw(raw)
+		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.OrderNew(o)
+		return bitfinex.OrderNew(o)
 	case "ou":
-		o, err := domain.NewOrderFromRaw(raw)
+		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.OrderUpdate(o)
+		return bitfinex.OrderUpdate(o)
 	case "oc":
-		o, err := domain.NewOrderFromRaw(raw)
+		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.OrderCancel(o)
+		return bitfinex.OrderCancel(o)
 	case "hts":
-		o, err := domain.NewTradeSnapshotFromRaw(raw)
+		o, err := bitfinex.NewTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.HistoricalTradeSnapshot(o)
+		return bitfinex.HistoricalTradeSnapshot(o)
 	case "te":
-		o, err := domain.NewTradeExecutionFromRaw(raw)
+		o, err := bitfinex.NewTradeExecutionFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "tu":
-		o, err := domain.NewTradeFromRaw(raw)
+		o, err := bitfinex.NewTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.TradeUpdate(o)
+		return bitfinex.TradeUpdate(o)
 	case "fte":
-		o, err := domain.NewFundingTradeFromRaw(raw)
+		o, err := bitfinex.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingTradeExecution(o)
+		return bitfinex.FundingTradeExecution(o)
 	case "ftu":
-		o, err := domain.NewFundingTradeFromRaw(raw)
+		o, err := bitfinex.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingTradeUpdate(o)
+		return bitfinex.FundingTradeUpdate(o)
 	case "hfts":
-		o, err := domain.NewFundingTradeSnapshotFromRaw(raw)
+		o, err := bitfinex.NewFundingTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.HistoricalFundingTradeSnapshot(o)
+		return bitfinex.HistoricalFundingTradeSnapshot(o)
 	case "n":
-		o, err := domain.NewNotificationFromRaw(raw)
+		o, err := bitfinex.NewNotificationFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fos":
-		o, err := domain.NewFundingOfferSnapshotFromRaw(raw)
+		o, err := bitfinex.NewFundingOfferSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fon":
-		o, err := domain.NewOfferFromRaw(raw)
+		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingOfferNew(o)
+		return bitfinex.FundingOfferNew(o)
 	case "fou":
-		o, err := domain.NewOfferFromRaw(raw)
+		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingOfferUpdate(o)
+		return bitfinex.FundingOfferUpdate(o)
 	case "foc":
-		o, err := domain.NewOfferFromRaw(raw)
+		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingOfferCancel(o)
+		return bitfinex.FundingOfferCancel(o)
 	case "fiu":
-		o, err := domain.NewFundingInfoFromRaw(raw)
+		o, err := bitfinex.NewFundingInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fcs":
-		o, err := domain.NewFundingCreditSnapshotFromRaw(raw)
+		o, err := bitfinex.NewFundingCreditSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fcn":
-		o, err := domain.NewCreditFromRaw(raw)
+		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingCreditNew(o)
+		return bitfinex.FundingCreditNew(o)
 	case "fcu":
-		o, err := domain.NewCreditFromRaw(raw)
+		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingCreditUpdate(o)
+		return bitfinex.FundingCreditUpdate(o)
 	case "fcc":
-		o, err := domain.NewCreditFromRaw(raw)
+		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingCreditCancel(o)
+		return bitfinex.FundingCreditCancel(o)
 	case "fls":
-		o, err := domain.NewFundingLoanSnapshotFromRaw(raw)
+		o, err := bitfinex.NewFundingLoanSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
 		return o
 	case "fln":
-		o, err := domain.NewLoanFromRaw(raw)
+		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingLoanNew(o)
+		return bitfinex.FundingLoanNew(o)
 	case "flu":
-		o, err := domain.NewLoanFromRaw(raw)
+		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingLoanUpdate(o)
+		return bitfinex.FundingLoanUpdate(o)
 	case "flc":
-		o, err := domain.NewLoanFromRaw(raw)
+		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return domain.FundingLoanCancel(o)
+		return bitfinex.FundingLoanCancel(o)
 		//case "uac":
 	case "hb":
-		return domain.Heartbeat{}
+		return bitfinex.Heartbeat{}
 	case "ats":
 		// TODO: Is not in documentation, so figure out what it is.
 		return nil
@@ -382,7 +382,7 @@ func (c Client) convertRaw(term string, raw []interface{}) interface{} {
 	case "mis": // Should not be sent anymore as of 2017-04-01
 		return nil
 	case "miu":
-		o, err := domain.NewMarginInfoFromRaw(raw)
+		o, err := bitfinex.NewMarginInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}

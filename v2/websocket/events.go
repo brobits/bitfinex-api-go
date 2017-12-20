@@ -75,6 +75,39 @@ type EventListener interface {
 	onRawEvent(e interface{})
 }
 
+type DefaultEventListener struct {
+	EventListener
+}
+
+func (d DefaultEventListener) onInfo(e InfoEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onAuth(e AuthEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onSubscribe(e SubscribeEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onUnsubscribe(e UnsubscribeEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onError(e ErrorEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onConf(e ConfEvent) {
+	// no-op
+}
+
+func (d DefaultEventListener) onRawEvent(e interface{}) {
+	// no-op
+}
+
+
 func (c Client) RegisterEventListener(listener EventListener) {
 	c.eventListener = listener
 }

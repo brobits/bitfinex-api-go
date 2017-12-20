@@ -2,7 +2,7 @@ package rest
 
 import (
 	"path"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 // TradeService manages the Trade endpoint.
@@ -11,7 +11,7 @@ type TradeService struct {
 }
 
 // All returns all orders for the authenticated account.
-func (s *TradeService) All(symbol string) (domain.TradeSnapshot, error) {
+func (s *TradeService) All(symbol string) (bitfinex.TradeSnapshot, error) {
 
 	raw, err := s.Request(NewRequestWithData(path.Join("trades", symbol, "hist"), map[string]interface{}{"start":nil, "end": nil, "limit": nil}))
 
@@ -19,7 +19,7 @@ func (s *TradeService) All(symbol string) (domain.TradeSnapshot, error) {
 		return nil, err
 	}
 
-	os, err := domain.NewTradeSnapshotFromRaw(raw)
+	os, err := bitfinex.NewTradeSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}

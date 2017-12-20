@@ -6,55 +6,55 @@ import (
 	"time"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 )
 
 func main() {
-	c := bitfinex.NewClient()
+	c := websocket.NewClient()
 
-	err := c.Websocket.Connect()
+	err := c.Connect()
 	if err != nil {
 		log.Fatal("Error connecting to web socket : ", err)
 	}
-	c.Websocket.SetReadTimeout(time.Second * 2)
+	c.SetReadTimeout(time.Second * 2)
 
-	c.Websocket.AttachEventHandler(func(ev interface{}) {
-		log.Printf("EVENT: %#v", ev)
-	})
-
-	h := func(ev interface{}) {
-		log.Printf("PUBLIC MSG BTCUSD: %#v", ev)
-	}
-
+	// subscribe to BTCUSD ticker
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-	msg := &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanTicker,
-		Symbol:  bitfinex.TradingPrefix + bitfinex.BTCUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h)
+	tkr, err := c.SubscribeTicker(ctx, bitfinex.TradingPrefix + bitfinex.BTCUSD)
 	if err != nil {
 		log.Fatal(err)
 	}
+	go func() {
+		for obj := range tkr {
+			if obj == nil {
+				break
+			}
+			log.Printf("PUBLIC MSG BTCUSD: %#v", obj)
+		}
+	}()
 
-	h2 := func(ev interface{}) {
-		log.Printf("PUBLIC MSG IOTUSD: %#v", ev)
-	}
-
+	// subscribe to IOTUSD trades
 	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
-	msg = &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanTrades,
-		Symbol:  bitfinex.TradingPrefix + bitfinex.IOTUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h2)
+	tds, err := c.SubscribeTrades(ctx, bitfinex.TradingPrefix + bitfinex.IOTUSD)
 	if err != nil {
 		log.Fatal(err)
 	}
+	go func() {
+		for obj := range tds {
+			if obj == nil {
+				break
+			}
+			log.Printf("PUBLIC MSG IOTUSD: %#v", obj)
+		}
+	}()
 
+	// listen for ws disconnect
 	for {
 		select {
-		case <-c.Websocket.Done():
-			log.Printf("channel closed: %s", c.Websocket.Err())
+		case m := <-c.Done():
+			if m != nil {
+				log.Printf("channel closed: %s", m)
+			}
 			return
 		}
 	}

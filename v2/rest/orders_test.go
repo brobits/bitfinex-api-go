@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 func TestOrdersAll(t *testing.T) {
@@ -49,7 +49,7 @@ func TestOrdersHistory(t *testing.T) {
 		return &resp, nil
 	}
 
-	orders, err := NewClientWithHttpDo(httpDo).Orders.History(domain.TradingPrefix + IOTBTC)
+	orders, err := NewClientWithHttpDo(httpDo).Orders.History(bitfinex.TradingPrefix + IOTBTC)
 
 	if err != nil {
 		t.Error(err)

@@ -3,7 +3,6 @@ package rest
 import (
 	"fmt"
 	"path"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
@@ -13,14 +12,14 @@ type OrderService struct {
 }
 
 // All returns all orders for the authenticated account.
-func (s *OrderService) All(symbol string) (domain.OrderSnapshot, error) {
+func (s *OrderService) All(symbol string) (bitfinex.OrderSnapshot, error) {
 	raw, err := s.Request(NewRequest(path.Join("orders", symbol)))
 
 	if err != nil {
 		return nil, err
 	}
 
-	os, err := domain.NewOrderSnapshotFromRaw(raw)
+	os, err := bitfinex.NewOrderSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +29,7 @@ func (s *OrderService) All(symbol string) (domain.OrderSnapshot, error) {
 
 // Status retrieves the given order from the API. This is just a wrapper around
 // the All() method, since the API does not provide lookup for a single Order.
-func (s *OrderService) Status(orderID int64) (o domain.Order, err error) {
+func (s *OrderService) Status(orderID int64) (o bitfinex.Order, err error) {
 	os, err := s.All("")
 
 	if err != nil {
@@ -51,7 +50,7 @@ func (s *OrderService) Status(orderID int64) (o domain.Order, err error) {
 }
 
 // All returns all orders for the authenticated account.
-func (s *OrderService) History(symbol string) (domain.OrderSnapshot, error) {
+func (s *OrderService) History(symbol string) (bitfinex.OrderSnapshot, error) {
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol cannot be empty")
 	}
@@ -62,7 +61,7 @@ func (s *OrderService) History(symbol string) (domain.OrderSnapshot, error) {
 		return nil, err
 	}
 
-	os, err := domain.NewOrderSnapshotFromRaw(raw)
+	os, err := bitfinex.NewOrderSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package domain
+package bitfinex
 
 import (
 	"encoding/json"

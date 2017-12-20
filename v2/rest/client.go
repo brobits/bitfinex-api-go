@@ -18,14 +18,17 @@ type Synchronous interface {
 
 type Client struct {
 	// base members for synchronous API
-	HTTPClient *http.Client
-	httpDo func(c *http.Client, req *http.Request) (*http.Response, error)
-	BaseURL *url.URL
+	HTTPClient	*http.Client
+	httpDo		func(c *http.Client, req *http.Request) (*http.Response, error)
+	BaseURL		*url.URL
+	apiKey		string
+	apiSecret	string
 
 	// service providers
-	Orders OrderService
-	Positions PositionService
-	Trades TradeService
+	Orders		OrderService
+	Positions	PositionService
+	Trades		TradeService
+	Platform	PlatformService
 }
 
 func NewClient() *Client {
@@ -45,6 +48,12 @@ func NewClientWithHttpDo(httpDo func(c *http.Client, r *http.Request)(*http.Resp
 	c.Orders = OrderService{Synchronous: c}
 
 	return c
+}
+
+func (c Client) Credentials(key string, secret string) *Client {
+	c.apiKey = key
+	c.apiSecret = secret
+	return &c
 }
 
 func (c Client) Request(req Request) ([]interface{}, error) {

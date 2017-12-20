@@ -1,7 +1,7 @@
 package rest
 
 import (
-	"github.com/bitfinexcom/bitfinex-api-go/v2/domain"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 // PositionService manages the Position endpoint.
@@ -10,14 +10,14 @@ type PositionService struct {
 }
 
 // All returns all positions for the authenticated account.
-func (s *PositionService) All() (domain.PositionSnapshot, error) {
+func (s *PositionService) All() (bitfinex.PositionSnapshot, error) {
 	raw, err := s.Request(NewRequest("positions"))
 
 	if err != nil {
 		return nil, err
 	}
 
-	os, err := domain.NewPositionSnapshotFromRaw(raw)
+	os, err := bitfinex.NewPositionSnapshotFromRaw(raw)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package rest
+package bitfinex
 
 // Available pairs
 const (
