@@ -2,12 +2,11 @@ package rest
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/url"
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 )
 
 var productionBaseURL = "https://api.bitfinex.com/v2/"
@@ -18,17 +17,16 @@ type Synchronous interface {
 
 type Client struct {
 	// base members for synchronous API
-	HTTPClient	*http.Client
-	httpDo		func(c *http.Client, req *http.Request) (*http.Response, error)
-	BaseURL		*url.URL
-	apiKey		string
-	apiSecret	string
+	apiKey    string
+	apiSecret string
 
 	// service providers
-	Orders		OrderService
-	Positions	PositionService
-	Trades		TradeService
-	Platform	PlatformService
+	Orders    OrderService
+	Positions PositionService
+	Trades    TradeService
+	Platform  PlatformService
+
+	Synchronous
 }
 
 func NewClient() *Client {
@@ -38,15 +36,22 @@ func NewClient() *Client {
 	return NewClientWithHttpDo(httpDo)
 }
 
-func NewClientWithHttpDo(httpDo func(c *http.Client, r *http.Request)(*http.Response, error)) *Client {
+func NewClientWithHttpDo(httpDo func(c *http.Client, r *http.Request) (*http.Response, error)) *Client {
 	url, _ := url.Parse(productionBaseURL)
-	c := &Client{
-		BaseURL: url,
-		httpDo: httpDo,
+	sync := &HttpTransport{
+		BaseURL:    url,
+		httpDo:     httpDo,
 		HTTPClient: http.DefaultClient,
 	}
-	c.Orders = OrderService{Synchronous: c}
+	return NewClientWithSynchronous(sync)
+}
 
+// mock me
+func NewClientWithSynchronous(sync Synchronous) *Client {
+	c := &Client{
+		Synchronous: sync,
+	}
+	c.Orders = OrderService{Synchronous: c}
 	return c
 }
 
@@ -56,72 +61,12 @@ func (c Client) Credentials(key string, secret string) *Client {
 	return &c
 }
 
-func (c Client) Request(req Request) ([]interface{}, error) {
-	var raw []interface{}
-
-	rel, err := url.Parse(req.RefURL)
-	if err != nil {
-		return nil, err
-	}
-	if req.Params != nil {
-		rel.RawQuery = req.Params.Encode()
-	}
-	if req.Data == nil {
-		req.Data = map[string]interface{}{}
-	}
-
-	b, err := json.Marshal(req.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	body := bytes.NewReader(b)
-
-	u := c.BaseURL.ResolveReference(rel)
-	httpReq, err := http.NewRequest(req.Method, u.String(), body)
-
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = c.do(httpReq, &raw)
-	if err != nil {
-		return nil, err
-	}
-
-	return raw, nil
-}
-
-// Do executes API request created by NewRequest method or custom *http.Request.
-func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
-	resp, err := c.httpDo(c.HTTPClient, req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	response := newResponse(resp)
-	err = checkResponse(response)
-	if err != nil {
-		return response, err
-	}
-
-	if v != nil {
-		err = json.Unmarshal(response.Body, v)
-		if err != nil {
-			return response, err
-		}
-	}
-
-	return response, nil
-}
-
 // Request is a wrapper for standard http.Request.  Default method is POST with no data.
 type Request struct {
-	RefURL string				// ref url
-	Data map[string]interface{} // body data
-	Method string				// http method
-	Params url.Values			// query parameters
+	RefURL string                 // ref url
+	Data   map[string]interface{} // body data
+	Method string                 // http method
+	Params url.Values             // query parameters
 }
 
 // Response is a wrapper for standard http.Response and provides more methods.
@@ -145,7 +90,7 @@ func NewRequestWithData(refURL string, data map[string]interface{}) Request {
 func NewRequestWithDataMethod(refURL string, data map[string]interface{}, method string) Request {
 	return Request{
 		RefURL: refURL,
-		Data: data,
+		Data:   data,
 		Method: method,
 	}
 }
@@ -182,7 +127,7 @@ func checkResponse(r *Response) error {
 	err := json.Unmarshal(r.Body, &raw)
 	if err != nil {
 		errorResponse.Message = "Error decoding response error message. " +
-			  "Please see response body for more information."
+			"Please see response body for more information."
 		return errorResponse
 	}
 

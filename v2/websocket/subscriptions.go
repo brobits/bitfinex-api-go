@@ -1,15 +1,15 @@
 package websocket
 
 import (
-	"sync"
-	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 )
 
 type subscriptionRequest struct {
-	SubID		string	`json:"subId"`
-	Event		string 	`json:"event"`
+	SubID string `json:"subId"`
+	Event string `json:"event"`
 
 	// authenticated
 	APIKey      string   `json:"apiKey,omitempty"`
@@ -36,18 +36,16 @@ type unsubscribeRequest struct {
 type messageFactory func(raw []interface{}) (interface{}, error)
 
 type subscription struct {
-	ChanID			int64
-	pending			bool
+	ChanID  int64
+	pending bool
 
-	Request 		*subscriptionRequest
-	pump 			chan interface{}
+	Request *subscriptionRequest
 }
 
 func newSubscription(request *subscriptionRequest) *subscription {
 	return &subscription{
 		Request: request,
 		pending: true,
-		pump: make(chan interface{}),
 	}
 }
 
@@ -55,35 +53,29 @@ func (s subscription) SubID() string {
 	return s.Request.SubID
 }
 
-// receiver only
-func (s subscription) Stream() <-chan interface{} {
-	return s.pump
-}
-
-func (s subscription) Publish(msg interface{}) {
-	s.pump <- msg
-}
-
 func (s subscription) Pending() bool {
 	return s.pending
 }
 
-func (s subscription) Close() {
-	close(s.pump)
+func newSubscriptions() *subscriptions {
+	return &subscriptions{
+		subsBySubID:  make(map[string]*subscription),
+		subsByChanID: make(map[int64]*subscription),
+	}
 }
 
-type Subscriptions struct {
-	lock			sync.Mutex
+type subscriptions struct {
+	lock sync.Mutex
 
-	subsBySubID		map[string]*subscription // subscription map indexed by subscription ID
-	subsByChanID 	map[int64]*subscription // subscription map indexed by channel ID
+	subsBySubID  map[string]*subscription // subscription map indexed by subscription ID
+	subsByChanID map[int64]*subscription  // subscription map indexed by channel ID
 }
 
-func (s Subscriptions) NextSubID() string {
+func (s *subscriptions) nextSubID() string {
 	return utils.GetNonce()
 }
 
-func (s Subscriptions) Add(sub *subscriptionRequest) *subscription {
+func (s *subscriptions) add(sub *subscriptionRequest) *subscription {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	subscription := newSubscription(sub)
@@ -91,38 +83,36 @@ func (s Subscriptions) Add(sub *subscriptionRequest) *subscription {
 	return subscription
 }
 
-func (s Subscriptions) RemoveByChanID(chanID int64) error {
+func (s *subscriptions) removeByChanID(chanID int64) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	sub, ok := s.subsByChanID[chanID]
 	if !ok {
-		return errors.New(fmt.Sprintf("could not find channel ID %d", chanID))
+		return fmt.Errorf("could not find channel ID %d", chanID)
 	}
 	delete(s.subsByChanID, chanID)
 	if _, ok = s.subsBySubID[sub.SubID()]; ok {
 		delete(s.subsBySubID, sub.SubID())
 	}
-	sub.Close()
 	return nil
 }
 
-func (s Subscriptions) RemoveBySubID(subID string) error {
+func (s *subscriptions) removeBySubID(subID string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	sub, ok := s.subsBySubID[subID]
 	if !ok {
-		return errors.New(fmt.Sprintf("could not find subscription ID %s", subID))
+		return fmt.Errorf("could not find subscription ID %s", subID)
 	}
 	// exists, remove both indices
 	delete(s.subsBySubID, subID)
 	if _, ok = s.subsByChanID[sub.ChanID]; ok {
 		delete(s.subsByChanID, sub.ChanID)
 	}
-	sub.Close()
 	return nil
 }
 
-func (s Subscriptions) Activate(subID string, chanID int64) error {
+func (s *subscriptions) activate(subID string, chanID int64) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if sub, ok := s.subsBySubID[subID]; ok {
@@ -130,32 +120,23 @@ func (s Subscriptions) Activate(subID string, chanID int64) error {
 		s.subsByChanID[chanID] = sub
 		return nil
 	}
-	return errors.New(fmt.Sprintf("could not find subscription ID %s", subID))
+	return fmt.Errorf("could not find subscription ID %s", subID)
 }
 
-func (s Subscriptions) Route(chanID int64, msg []interface{}) error {
-	sub, err := s.LookupByChannelID(chanID)
-	if err != nil {
-		return err
-	}
-	sub.Publish(msg)
-	return nil
-}
-
-func (s Subscriptions) LookupByChannelID(chanID int64) (*subscription, error) {
+func (s *subscriptions) lookupByChannelID(chanID int64) (*subscription, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if sub, ok := s.subsByChanID[chanID]; ok {
 		return sub, nil
 	}
-	return nil, errors.New(fmt.Sprintf("could not find subscription for channel ID %d", chanID))
+	return nil, fmt.Errorf("could not find subscription for channel ID %d", chanID)
 }
 
-func (s Subscriptions) LookupBySubscriptionID(subID string) (*subscription, error) {
+func (s *subscriptions) lookupBySubscriptionID(subID string) (*subscription, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if sub, ok := s.subsBySubID[subID]; ok {
 		return sub, nil
 	}
-	return nil, errors.New(fmt.Sprintf("could not find subscription ID %s", subID))
+	return nil, fmt.Errorf("could not find subscription ID %s", subID)
 }

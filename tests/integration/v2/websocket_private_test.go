@@ -20,6 +20,8 @@ func TestWebsocketOrder(t *testing.T) {
 
 	c := websocket.NewClient().Credentials(key, secret)
 
+	errch := make(chan error)
+
 	err := c.Connect()
 	if err != nil {
 		t.Fatalf("connecting to websocket service: %s", err)
@@ -27,35 +29,30 @@ func TestWebsocketOrder(t *testing.T) {
 	defer c.Close()
 	c.SetReadTimeout(time.Second * 2)
 
-	c.AttachEventHandler(func(ev interface{}) {
-		switch e := ev.(type) {
-		case bitfinex.AuthEvent:
-			if e.Status == "OK" {
+	go func() {
+		for ev := range c.Listen() {
+			switch e := ev.(type) {
+			case bitfinex.Notification:
+				if e.Status == "ERROR" && e.Type == "on-req" {
+					t.Errorf("failed to create order: %s", e.Text)
+				}
+			case bitfinex.OrderNew:
+				wg.Done()
+			case bitfinex.OrderCancel:
+				wg.Done()
+			case error:
+				t.Logf("Listen() error: %s", ev)
+				errch <- ev.(error)
 				wg.Done()
 			}
-		case bitfinex.UnsubscribeEvent:
-			wg.Done()
 		}
-	})
-
-	c.AttachPrivateHandler(func(ev interface{}) {
-		switch e := ev.(type) {
-		case bitfinex.Notification:
-			if e.Status == "ERROR" && e.Type == "on-req" {
-				t.Errorf("failed to create order: %s", e.Text)
-			}
-		case bitfinex.OrderNew:
-			wg.Done()
-		case bitfinex.OrderCancel:
-			wg.Done()
-		}
-	})
+	}()
 
 	err = c.Authenticate(context.Background())
 	if err != nil {
 		t.Fatalf("authenticating with websocket service: %s", err)
 	}
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Fatalf("failed to authenticate with websocket service: %s", err)
 	}
 
@@ -71,12 +68,13 @@ func TestWebsocketOrder(t *testing.T) {
 		Price:  28.5,
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
-	err = c.Send(ctx, o)
+	ctx, cxl1 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cxl1()
+	err = c.SubmitOrder(ctx, o)
 	if err != nil {
 		t.Fatalf("failed to send OrderNewRequest: %s", err)
 	}
-	if err := wait(&wg, c.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Fatalf("failed to create order: %s", err)
 	}
 
@@ -86,12 +84,13 @@ func TestWebsocketOrder(t *testing.T) {
 	}
 
 	wg.Add(1)
-	ctx, _ = context.WithTimeout(context.Background(), 2*time.Second)
-	err = c.Send(ctx, oc)
+	ctx, cxl2 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cxl2()
+	err = c.SubmitCancel(ctx, oc)
 	if err != nil {
 		t.Fatalf("failed to send OrderCancelRequest: %s", err)
 	}
-	if err := wait(&wg, c.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Fatalf("failed to cancel order: %s", err)
 	}
 }

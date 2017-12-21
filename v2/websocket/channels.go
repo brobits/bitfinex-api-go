@@ -1,12 +1,13 @@
 package websocket
 
 import (
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
-	"fmt"
 	"encoding/json"
+	"fmt"
+
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
-func (c Client) handleChannel(msg []byte) error {
+func (c *Client) handleChannel(msg []byte) error {
 	var raw []interface{}
 	err := json.Unmarshal(msg, &raw)
 	if err != nil {
@@ -21,7 +22,7 @@ func (c Client) handleChannel(msg []byte) error {
 	}
 
 	chanID := int64(chID)
-	sub, err := c.subscriptions.LookupByChannelID(chanID)
+	sub, err := c.subscriptions.lookupByChannelID(chanID)
 	if err != nil {
 		// no subscribed channel for message
 		return err
@@ -46,7 +47,7 @@ func (c Client) handleChannel(msg []byte) error {
 						return err
 					}
 					// private data is returned as strongly typed data, publish directly
-					sub.Publish(obj)
+					c.listener <- obj
 				}
 			}
 		}
@@ -66,7 +67,7 @@ func (c Client) handleChannel(msg []byte) error {
 				// factory error
 				return err
 			}
-			sub.Publish(msg)
+			c.listener <- msg
 		} else {
 			// factory lookup error
 			return fmt.Errorf("could not find public factory for %s channel", sub.Request.Channel)
@@ -76,7 +77,7 @@ func (c Client) handleChannel(msg []byte) error {
 	return nil
 }
 
-func (c Client) handleHeartbeat() {
+func (c *Client) handleHeartbeat() {
 	// TODO internal heartbeat timeout thread?
 }
 
@@ -86,7 +87,7 @@ type unsubscribeMsg struct {
 }
 
 // inputs: [ChanID, [Data]], [ChanID, "hb"]
-func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
+func (c *Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
 	switch len(raw) {
 	case 2:
 		// [ChanID, [Data]] or [ChanID, "hb"]
@@ -111,7 +112,7 @@ func (c Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) 
 	return nil, fmt.Errorf("unexpected data message: %#v", raw)
 }
 
-func (c Client) processDataSlice(data []interface{}) ([]interface{}, error) {
+func (c *Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}
@@ -151,7 +152,7 @@ func (c Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 // public msg: [ChanID, [Data]]
 // hb (both): [ChanID, "hb"]
 // private msg: [ChanID, "type", [Data]]
-func (c Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
+func (c *Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
 	if len(data) < 2 {
 		return ms, fmt.Errorf("data message too short: %#v", data)
 	}
@@ -178,7 +179,7 @@ func (c Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, er
 
 // convertRaw takes a term and the raw data attached to it to try and convert that
 // untyped list into a proper type.
-func (c Client) convertRaw(term string, raw []interface{}) interface{} {
+func (c *Client) convertRaw(term string, raw []interface{}) interface{} {
 	// The things you do to get proper types.
 	switch term {
 	case "bu":

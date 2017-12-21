@@ -19,43 +19,31 @@ func main() {
 	c.SetReadTimeout(time.Second * 2)
 
 	// subscribe to BTCUSD ticker
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-	tkr, err := c.SubscribeTicker(ctx, bitfinex.TradingPrefix + bitfinex.BTCUSD)
+	ctx, cxl1 := context.WithTimeout(context.Background(), time.Second*1)
+	defer cxl1()
+	_, err = c.SubscribeTicker(ctx, bitfinex.TradingPrefix+bitfinex.BTCUSD)
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		for obj := range tkr {
-			if obj == nil {
-				break
-			}
-			log.Printf("PUBLIC MSG BTCUSD: %#v", obj)
-		}
-	}()
 
 	// subscribe to IOTUSD trades
-	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
-	tds, err := c.SubscribeTrades(ctx, bitfinex.TradingPrefix + bitfinex.IOTUSD)
+	ctx, cxl2 := context.WithTimeout(context.Background(), time.Second*1)
+	defer cxl2()
+	_, err = c.SubscribeTrades(ctx, bitfinex.TradingPrefix+bitfinex.IOTUSD)
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		for obj := range tds {
-			if obj == nil {
-				break
-			}
-			log.Printf("PUBLIC MSG IOTUSD: %#v", obj)
-		}
-	}()
 
-	// listen for ws disconnect
-	for {
-		select {
-		case m := <-c.Done():
-			if m != nil {
-				log.Printf("channel closed: %s", m)
-			}
-			return
+	for obj := range c.Listen() {
+		if obj == nil {
+			break
 		}
+		switch obj.(type) {
+		case error:
+			log.Printf("channel closed: %s", obj)
+			break
+		default:
+		}
+		log.Printf("MSG RECV: %#v", obj)
 	}
 }

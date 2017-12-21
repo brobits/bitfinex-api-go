@@ -16,14 +16,6 @@ import (
 //
 // you can obtain it from https://www.bitfinex.com/api
 
-type TestEventListener struct {
-	websocket.DefaultEventListener
-}
-
-func (t TestEventListener) onRawEvent(ev interface{}) {
-	log.Printf("EVENT: %#v", ev)
-}
-
 func main() {
 
 	key := os.Getenv("BFX_API_KEY")
@@ -34,13 +26,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting authenticated websocket: %s", err)
 	}
+	go func() {
+		for msg := range c.Listen() {
+			if msg == nil {
+				break
+			}
+			log.Printf("MSG RECV: %#v", msg)
+		}
+	}()
 
-	c.AttachEventListener(&TestEventListener{})
-/*
-	c.AttachPrivateHandler(func(msg interface{}) {
-		log.Printf("PRIV MSG: %#v", msg)
-	})
-*/
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
 	c.Authenticate(ctx)
 

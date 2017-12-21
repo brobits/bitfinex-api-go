@@ -3,26 +3,28 @@ package websocket
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
 
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 
-	"github.com/gorilla/websocket"
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
+
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 var productionBaseURL = "wss://api.bitfinex.com/ws/2"
+
+// ws-specific errors
+var (
+	ErrWSNotConnected     = fmt.Errorf("websocket connection not established")
+	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")
+)
 
 // Available channels
 const (
@@ -34,223 +36,156 @@ const (
 
 // Events
 const (
-	EventSubscribe 		= "subscribe"
-	EventUnsubscribe 	= "unsubscribe"
+	EventSubscribe   = "subscribe"
+	EventUnsubscribe = "unsubscribe"
 )
 
-var (
-	ErrWSNotConnected     = fmt.Errorf("websocket connection not established")
-	ErrWSAlreadyConnected = fmt.Errorf("websocket connection already established")
+// Authentication states
+const (
+	NoAuthentication         AuthState = 0
+	PendingAuthentication    AuthState = 1
+	SuccessfulAuthentication AuthState = 2
+	RejectedAuthentication   AuthState = 3
 )
 
+// private type--cannot instantiate.
 type authState byte
+
+// AuthState provides a typed authentication state.
 type AuthState authState // prevent user construction of authStates
 
-const (
-	NoAuthentication AuthState = 0
-	PendingAuthentication AuthState = 1
-	SuccessfulAuthentication AuthState = 2
-	RejectedAuthentication AuthState = 3
-)
-
+// Asynchronous interface decouples the underlying transport from API logic.
 type Asynchronous interface {
-	Send(ctx context.Context, msg interface{}) error
-	Listen(chanID int64) <-chan []interface{}
+	connect() error
+	send(ctx context.Context, msg interface{}) error
+	listen() <-chan []byte
+	close()
+	done() <-chan error
 }
 
+// Client provides a unified interface for users to interact with the Bitfinex V2 Websocket API.
 type Client struct {
-	ws				*websocket.Conn
-	wsLock			sync.Mutex
-	BaseURL 		string
-	TLSSkipVerify 	bool
-	timeout			int64 // read timeout
-	apiKey			string
-	apiSecret		string
-	Authentication	AuthState
+	timeout        int64 // read timeout
+	apiKey         string
+	apiSecret      string
+	Authentication AuthState
+	Asynchronous
 
 	// subscription manager
-	subscriptions 	Subscriptions
-	Asynchronous
-	factories		map[string]messageFactory
+	subscriptions *subscriptions
+	factories     map[string]messageFactory
 
-	// websocket shutdown signal
-	shutdown		chan error
+	// close signal sent to user on shutdown
+	shutdown chan bool
 
-	// close signal sent to user on shutdown.  ws -> shutdown channel -> internal cleanup -> done channel
-	done			chan error
-
-	// event forwarding
-	eventListener EventListener
+	listener chan interface{}
 }
 
-func (c Client) AttachEventListener(listener EventListener) {
-	c.eventListener = listener
-}
-
-func (c Client) Credentials(key string, secret string) *Client {
+// Credentials assigns authentication credentials to a connection request.
+func (c *Client) Credentials(key string, secret string) *Client {
 	c.apiKey = key
 	c.apiSecret = secret
-	return &c
+	return c
 }
 
-func (c Client) sign(msg string) string {
+func (c *Client) sign(msg string) string {
 	sig := hmac.New(sha512.New384, []byte(c.apiSecret))
 	sig.Write([]byte(msg))
 	return hex.EncodeToString(sig.Sum(nil))
 }
 
-func (c Client) registerFactory(channel string, factory messageFactory) {
+func (c *Client) registerFactory(channel string, factory messageFactory) {
 	c.factories[channel] = factory
 }
 
-func NewClientWithUrl(url string) *Client {
+// NewClientWithURL creates a new default client with a given API endpoint.
+func NewClientWithURL(url string) *Client {
 	c := &Client{
-		BaseURL: url,
-		shutdown: make(chan error),
-		done: make(chan error),
+		Asynchronous:   newWs(url),
+		shutdown:       make(chan bool),
 		Authentication: NoAuthentication,
-		factories: make(map[string]messageFactory),
+		factories:      make(map[string]messageFactory),
+		listener:       make(chan interface{}),
+		subscriptions:  newSubscriptions(),
 	}
 	c.registerFactory(ChanTicker, func(raw []interface{}) (msg interface{}, err error) {
 		return bitfinex.NewTickerFromRaw(raw)
 	})
+	// wait for shutdown signals from child & caller
+	go c.listenDisconnect()
 	return c
 }
 
+// NewClient creates a new default client.
 func NewClient() *Client {
-	return NewClientWithUrl(productionBaseURL)
+	return NewClientWithURL(productionBaseURL)
 }
 
-func (c Client) listenWs() {
+// Connect to the Bitfinex API.
+func (c *Client) Connect() error {
+	err := c.Asynchronous.connect()
+	if err == nil {
+		go c.listenUpstream()
+	}
+	return err
+}
+
+func (c *Client) listenDisconnect() {
+	// block until finished
+	select {
+	case err := <-c.Asynchronous.done(): // child shutdown
+		c.close(err)
+		return
+	case <-c.shutdown: // normal shutdown
+		return
+	}
+}
+
+func (c *Client) listenUpstream() {
 	for {
-		if c.ws == nil {
-			return
-		}
-		if atomic.LoadInt64(&c.timeout) != 0 {
-			c.ws.SetReadDeadline(time.Now().Add(time.Duration(c.timeout)))
-		}
-
 		select {
-		case err := <-c.shutdown:
-			// websocket termination
-			if err != nil {
-				c.done <- err
+		case <-c.shutdown:
+			return
+		case msg := <-c.Asynchronous.listen():
+			if msg != nil {
+				// Errors here should be non critical so we just log them.
+				err := c.handleMessage(msg)
+				if err != nil {
+					log.Printf("[WARN]: %s\n", err)
+				}
 			}
-			close(c.done)
-			return
-		default:
-		}
-
-		_, msg, err := c.ws.ReadMessage()
-		if err != nil {
-			c.close(err)
-			return
-		}
-
-		// Errors here should be non critical so we just log them.
-		err = c.handleMessage(msg)
-		if err != nil {
-			log.Printf("[WARN]: %s\n", err)
 		}
 	}
 }
 
-func (c Client) Connect() error {
-	if c.ws != nil {
-		return nil // no op
-	}
-	// init?
-	return c.connect()
-}
-
-func (c Client) connect() error {
-	c.wsLock.Lock()
-	defer c.wsLock.Unlock()
-	var d = websocket.Dialer{
-		Subprotocols:    []string{"p1", "p2"},
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		Proxy:           http.ProxyFromEnvironment,
-	}
-
-	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify}
-
-	ws, _, err := d.Dial(c.BaseURL, nil)
-	if err != nil {
-		return err
-	}
-
-	c.ws = ws
-	go c.listenWs()
-	return nil
-}
-
-// Done returns a channel that will be closed if the underlying websocket
-// connection gets closed.
-func (c Client) Done() <-chan error { return c.done }
-
-func (c Client) close(e error) {
-	c.wsLock.Lock()
-	if c.ws != nil {
-		if err := c.ws.Close(); err != nil {
-			log.Printf("[INFO]: error closing websocket: %s", err)
-		}
-		c.ws = nil
-	}
-	c.wsLock.Unlock()
-
-	// send error to shutdown channel
-	c.shutdown <- e
-
-	// close channel
+// cleanly dispose of resources & signal we are finished
+func (c *Client) close(e error) {
+	// internal goroutine shutdown
 	close(c.shutdown)
+
+	if c.listener != nil {
+		if e != nil {
+			c.listener <- e
+		}
+		close(c.listener)
+	}
 }
 
-func (c Client) Close() {
+// Listen provides an atomic interface for receiving API messages.
+// When a websocket connection is terminated, the listen channel will close.
+func (c *Client) Listen() <-chan interface{} {
+	return c.listener
+}
+
+// Close provides an interface for a user initiated shutdown.
+// Close will close the Done() channel.
+func (c *Client) Close() {
+	// close transport
+	c.Asynchronous.close()
 	c.close(nil)
 }
 
-// Send marshals the given interface and then sends it to the API. This method
-// can block so specify a context with timeout if you don't want to wait for too
-// long.
-func (c Client) Send(ctx context.Context, msg interface{}) error {
-	if c.ws == nil {
-		return ErrWSNotConnected
-	}
-
-	bs, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-c.Done():
-		return fmt.Errorf("websocket closed: ", "error msg") // TODO pass error msg
-	default:
-	}
-
-	c.wsLock.Lock()
-	defer c.wsLock.Unlock()
-	err = c.ws.WriteMessage(websocket.TextMessage, bs)
-	if err != nil {
-		c.close(err)
-		return err
-	}
-
-	return nil
-}
-
-func (c Client) listen(subID string) (<-chan interface{}, error) {
-	sub, err := c.subscriptions.LookupBySubscriptionID(subID)
-	if err != nil {
-		return nil, err
-	}
-	return sub.Stream(), nil
-}
-
-func (c Client) handleMessage(msg []byte) error {
+func (c *Client) handleMessage(msg []byte) error {
 	t := bytes.TrimLeftFunc(msg, unicode.IsSpace)
 	err := error(nil)
 	// either a channel data array or an event object, raw json encoding
@@ -264,64 +199,41 @@ func (c Client) handleMessage(msg []byte) error {
 	return err
 }
 
-// Unsubscribe takes an PublicSubscriptionRequest and tries to unsubscribe from the
-// channel described by that request.
 /*
-func (c Client) Unsubscribe(ctx context.Context, p *PublicSubscriptionRequest) error {
-	if p == nil {
-		return fmt.Errorf("PublicSubscriptionRequest cannot be nil")
-	}
-	c.subscriptions.RemoveBySubID(p.SubID)
-	return fmt.Errorf("could not find channel for symbol")
-}
-*/
-
-func (c Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
-	return c.Send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
-}
-
-/*
-// Subscribe to one of the public websocket channels.
-func (c Client) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest) (<-chan []interface{}, error) {
-	if c.ws == nil {
-		return nil, ErrWSNotConnected
-	} else if msg == nil {
-		return nil, fmt.Errorf("no subscription request provided")
-	}
-
-	msg.Event = "subscribe"
-	if msg.SubID == "" {
-		msg.SubID = utils.GetNonce()
-	}
-
-	if _, err := c.subscriptions.LookupBySubscriptionID(msg.SubID); err == nil {
-		return nil, fmt.Errorf("subscription exists for sub ID %s", msg.SubID)
-	}
-
-	sub := c.subscriptions.Add(msg)
-	err := c.Send(ctx, msg)
+// listen to typed messages
+func (c *Client) listen(subID string) (<-chan interface{}, error) {
+	sub, err := c.subscriptions.lookupBySubscriptionID(subID)
 	if err != nil {
-		c.subscriptions.RemoveBySubID(msg.SubID)
 		return nil, err
 	}
 	return sub.Stream(), nil
 }
 */
+func (c *Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
+	return c.send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
+}
 
-// Unsubscribe from the websocket channel with the given channel id and close
-// the associated go channel.
-func (c Client) UnsubscribeByChanID(ctx context.Context, id int64) error {
-	err := c.subscriptions.RemoveByChanID(id)
+func (c *Client) unsubscribeByChanID(ctx context.Context, id int64) error {
+	err := c.subscriptions.removeByChanID(id)
 	if err != nil {
 		return err
 	}
 	return c.sendUnsubscribeMessage(ctx, id)
 }
 
+// Unsubscribe looks up an existing subscription by ID and sends an unsubscribe request.
+func (c *Client) Unsubscribe(ctx context.Context, id string) error {
+	sub, err := c.subscriptions.lookupBySubscriptionID(id)
+	if err != nil {
+		return err
+	}
+	return c.unsubscribeByChanID(ctx, sub.ChanID)
+}
+
 // Authenticate creates the payload for the authentication request and sends it
 // to the API. The filters will be applied to the authenticated channel, i.e.
 // only subscribe to the filtered messages.
-func (c Client) Authenticate(ctx context.Context, filter ...string) error {
+func (c *Client) Authenticate(ctx context.Context, filter ...string) error {
 	nonce := utils.GetNonce()
 
 	payload := "AUTH" + nonce
@@ -334,9 +246,9 @@ func (c Client) Authenticate(ctx context.Context, filter ...string) error {
 		Filter:      filter,
 		SubID:       nonce,
 	}
-	c.subscriptions.Add(s)
+	c.subscriptions.add(s)
 
-	if err := c.Send(ctx, s); err != nil {
+	if err := c.send(ctx, s); err != nil {
 		return err
 	}
 	c.Authentication = PendingAuthentication
@@ -345,42 +257,6 @@ func (c Client) Authenticate(ctx context.Context, filter ...string) error {
 }
 
 // SetReadTimeout sets the read timeout for the underlying websocket connections.
-func (c Client) SetReadTimeout(t time.Duration) {
+func (c *Client) SetReadTimeout(t time.Duration) {
 	atomic.StoreInt64(&c.timeout, t.Nanoseconds())
 }
-
-// TODO auto subscription with connect
-/*
-	async := e.Asynchronous.Listen()
-	go func() {
-		for o := range async {
-			if o == nil {
-				// channel closed, propagate EOT
-				close(ch)
-			}
-			tick, err := bitfinex.NewTickerFromRaw(o)
-			if err != nil {
-				log.Printf("could not crack message: %s", err.Error())
-				continue
-			}
-			ch <- &tick
-		}
-	}()
- */
-/*
-func ExampleUsage() {
-	client := ExampleClient{}
-	ch, err := client.SubscribeTicker("tBTCUSD")
-	if err != nil {
-		// error subscribing
-		return
-	}
-	for tick := range ch {
-		if tick == nil {
-			// channel closed
-			return
-		}
-		// TODO: handle tick
-	}
-}
-*/

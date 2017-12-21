@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 )
 
-func wait(wg *sync.WaitGroup, bc <-chan struct{}, to time.Duration) error {
+func wait(wg *sync.WaitGroup, bc <-chan error, to time.Duration) error {
 	c := make(chan struct{})
 	go func() {
 		defer close(c)
@@ -27,185 +28,189 @@ func wait(wg *sync.WaitGroup, bc <-chan struct{}, to time.Duration) error {
 }
 
 func TestPublicTicker(t *testing.T) {
-	c := bitfinex.NewClient()
+	c := websocket.NewClient()
 	wg := sync.WaitGroup{}
 	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. data message
 
-	err := c.Websocket.Connect()
+	err := c.Connect()
 	if err != nil {
 		t.Fatal("Error connecting to web socket : ", err)
 	}
-	defer c.Websocket.Close()
-	c.Websocket.SetReadTimeout(time.Second * 2)
+	defer c.Close()
+	c.SetReadTimeout(time.Second * 2)
 
-	c.Websocket.AttachEventHandler(func(ev interface{}) {
-		wg.Done()
-	})
+	errch := make(chan error)
+	go func() {
+		select {
+		case msg := <-c.Listen():
+			switch msg.(type) {
+			case error:
+				errch <- msg.(error)
+			default:
+			}
+			wg.Done()
+		}
+	}()
 
-	h := func(ev interface{}) {
-		wg.Done()
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	msg := &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanTicker,
-		Symbol:  bitfinex.TradingPrefix + bitfinex.BTCUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h)
+	ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
+	defer cxl()
+	id, err := c.SubscribeTicker(ctx, bitfinex.TradingPrefix+bitfinex.BTCUSD)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Fatalf("failed to receive message from websocket: %s", err)
 	}
 
-	err = c.Websocket.Unsubscribe(ctx, msg)
+	err = c.Unsubscribe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wg.Add(1)
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 }
 
 func TestPublicTrades(t *testing.T) {
-	c := bitfinex.NewClient()
+	c := websocket.NewClient()
 	wg := sync.WaitGroup{}
 	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. data message
 
-	err := c.Websocket.Connect()
+	err := c.Connect()
 	if err != nil {
 		t.Fatal("Error connecting to web socket : ", err)
 	}
-	defer c.Websocket.Close()
-	c.Websocket.SetReadTimeout(time.Second * 2)
+	defer c.Close()
+	c.SetReadTimeout(time.Second * 2)
 
-	c.Websocket.AttachEventHandler(func(ev interface{}) {
-		wg.Done()
-	})
+	errch := make(chan error)
+	go func() {
+		select {
+		case msg := <-c.Listen():
+			switch msg.(type) {
+			case error:
+				errch <- msg.(error)
+			default:
+			}
+			wg.Done()
+		}
+	}()
 
-	h := func(ev interface{}) {
-		wg.Done()
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	msg := &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanTrades,
-		Symbol:  bitfinex.TradingPrefix + bitfinex.BTCUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h)
+	ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
+	defer cxl()
+	id, err := c.SubscribeTrades(ctx, bitfinex.TradingPrefix+bitfinex.BTCUSD)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 
-	err = c.Websocket.Unsubscribe(ctx, msg)
+	err = c.Unsubscribe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wg.Add(1)
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 }
 
 func TestPublicBooks(t *testing.T) {
-	c := bitfinex.NewClient()
+	c := websocket.NewClient()
 	wg := sync.WaitGroup{}
 	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. data message
 
-	err := c.Websocket.Connect()
+	err := c.Connect()
 	if err != nil {
 		t.Fatal("Error connecting to web socket : ", err)
 	}
-	defer c.Websocket.Close()
-	c.Websocket.SetReadTimeout(time.Second * 2)
+	defer c.Close()
+	c.SetReadTimeout(time.Second * 2)
 
-	c.Websocket.AttachEventHandler(func(ev interface{}) {
-		wg.Done()
-	})
+	errch := make(chan error)
+	go func() {
+		select {
+		case msg := <-c.Listen():
+			switch msg.(type) {
+			case error:
+				errch <- msg.(error)
+			default:
+			}
+			wg.Done()
+		}
+	}()
 
-	h := func(ev interface{}) {
-		wg.Done()
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	msg := &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanBook,
-		Symbol:  bitfinex.TradingPrefix + bitfinex.BTCUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h)
+	ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
+	defer cxl()
+	id, err := c.SubscribeBook(ctx, bitfinex.TradingPrefix+bitfinex.BTCUSD)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Fatalf("failed to receive message from websocket: %s", err)
 	}
 
-	err = c.Websocket.Unsubscribe(ctx, msg)
+	err = c.Unsubscribe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wg.Add(1)
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 }
 
 func TestPublicCandles(t *testing.T) {
-	c := bitfinex.NewClient()
+	c := websocket.NewClient()
 	wg := sync.WaitGroup{}
 	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. data message
 
-	err := c.Websocket.Connect()
+	err := c.Connect()
 	if err != nil {
 		t.Fatal("Error connecting to web socket : ", err)
 	}
-	defer c.Websocket.Close()
-	c.Websocket.SetReadTimeout(time.Second * 2)
+	defer c.Close()
+	c.SetReadTimeout(time.Second * 2)
 
-	c.Websocket.AttachEventHandler(func(ev interface{}) {
-		wg.Done()
-	})
+	errch := make(chan error)
+	go func() {
+		select {
+		case msg := <-c.Listen():
+			switch msg.(type) {
+			case error:
+				errch <- msg.(error)
+			default:
+			}
+			wg.Done()
+		}
+	}()
 
-	h := func(ev interface{}) {
-		wg.Done()
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	msg := &bitfinex.PublicSubscriptionRequest{
-		Event:   "subscribe",
-		Channel: bitfinex.ChanCandles,
-		Key:     "trade:1M:" + bitfinex.TradingPrefix + bitfinex.BTCUSD,
-	}
-	err = c.Websocket.Subscribe(ctx, msg, h)
+	ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
+	defer cxl()
+	id, err := c.SubscribeCandles(ctx, bitfinex.TradingPrefix+bitfinex.BTCUSD, bitfinex.OneMonth)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 
-	err = c.Websocket.Unsubscribe(ctx, msg)
+	err = c.Unsubscribe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wg.Add(1)
 
-	if err := wait(&wg, c.Websocket.Done(), 2*time.Second); err != nil {
+	if err := wait(&wg, errch, 2*time.Second); err != nil {
 		t.Errorf("failed to receive message from websocket: %s", err)
 	}
 }
