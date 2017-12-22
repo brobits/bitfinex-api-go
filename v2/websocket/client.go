@@ -108,8 +108,12 @@ func NewClientWithURL(url string) *Client {
 		listener:       make(chan interface{}),
 		subscriptions:  newSubscriptions(),
 	}
-	c.registerFactory(ChanTicker, func(raw []interface{}) (msg interface{}, err error) {
-		return bitfinex.NewTickerFromRaw(raw)
+	c.registerFactory(ChanTicker, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
+		sub, err := c.subscriptions.lookupByChannelID(chanID)
+		if err == nil {
+			return bitfinex.NewTickerFromRaw(sub.Request.Symbol, raw)
+		}
+		return nil, err
 	})
 	// wait for shutdown signals from child & caller
 	go c.listenDisconnect()
@@ -181,8 +185,7 @@ func (c *Client) Listen() <-chan interface{} {
 // Close will close the Done() channel.
 func (c *Client) Close() {
 	// close transport
-	c.Asynchronous.close()
-	c.close(nil)
+	c.Asynchronous.close() // will trigger a close()
 }
 
 func (c *Client) handleMessage(msg []byte) error {
@@ -199,25 +202,17 @@ func (c *Client) handleMessage(msg []byte) error {
 	return err
 }
 
-/*
-// listen to typed messages
-func (c *Client) listen(subID string) (<-chan interface{}, error) {
-	sub, err := c.subscriptions.lookupBySubscriptionID(subID)
-	if err != nil {
-		return nil, err
-	}
-	return sub.Stream(), nil
-}
-*/
 func (c *Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
 	return c.send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
 }
 
 func (c *Client) unsubscribeByChanID(ctx context.Context, id int64) error {
-	err := c.subscriptions.removeByChanID(id)
-	if err != nil {
-		return err
-	}
+	/*
+		err := c.subscriptions.removeByChanID(id)
+		if err != nil {
+			return err
+		}
+	*/
 	return c.sendUnsubscribeMessage(ctx, id)
 }
 

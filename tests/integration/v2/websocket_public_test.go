@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -41,14 +42,21 @@ func TestPublicTicker(t *testing.T) {
 
 	errch := make(chan error)
 	go func() {
-		select {
-		case msg := <-c.Listen():
-			switch msg.(type) {
-			case error:
-				errch <- msg.(error)
-			default:
+		for {
+			select {
+			case msg := <-c.Listen():
+				if msg == nil {
+					return
+				}
+				log.Printf("recv msg: %#v", msg)
+				switch msg.(type) {
+				case error:
+					errch <- msg.(error)
+				default:
+					t.Logf("test recv: %#v", msg)
+				}
+				wg.Done()
 			}
-			wg.Done()
 		}
 	}()
 
@@ -60,9 +68,10 @@ func TestPublicTicker(t *testing.T) {
 	}
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Fatalf("failed to receive message from websocket: %s", err)
+		t.Fatalf("failed to receive first message from websocket: %s", err)
 	}
 
+	// here?
 	err = c.Unsubscribe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +79,7 @@ func TestPublicTicker(t *testing.T) {
 	wg.Add(1)
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive second message from websocket: %s", err)
 	}
 }
 
@@ -107,7 +116,7 @@ func TestPublicTrades(t *testing.T) {
 	}
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive first message from websocket: %s", err)
 	}
 
 	err = c.Unsubscribe(ctx, id)
@@ -117,7 +126,7 @@ func TestPublicTrades(t *testing.T) {
 	wg.Add(1)
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive second message from websocket: %s", err)
 	}
 }
 
@@ -154,7 +163,7 @@ func TestPublicBooks(t *testing.T) {
 	}
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Fatalf("failed to receive message from websocket: %s", err)
+		t.Fatalf("failed to receive first message from websocket: %s", err)
 	}
 
 	err = c.Unsubscribe(ctx, id)
@@ -164,7 +173,7 @@ func TestPublicBooks(t *testing.T) {
 	wg.Add(1)
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive second message from websocket: %s", err)
 	}
 }
 
@@ -201,7 +210,7 @@ func TestPublicCandles(t *testing.T) {
 	}
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive first message from websocket: %s", err)
 	}
 
 	err = c.Unsubscribe(ctx, id)
@@ -211,6 +220,6 @@ func TestPublicCandles(t *testing.T) {
 	wg.Add(1)
 
 	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Errorf("failed to receive message from websocket: %s", err)
+		t.Errorf("failed to receive second message from websocket: %s", err)
 	}
 }

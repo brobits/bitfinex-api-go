@@ -794,7 +794,7 @@ type Loan struct {
 
 func NewLoanFromRaw(raw []interface{}) (o Loan, err error) {
 	if len(raw) < 21 {
-		return o, fmt.Errorf("data slice too short for loan: %#v", raw)
+		return o, fmt.Errorf("data slice too short (len=%d) for loan: %#v", len(raw), raw)
 	}
 
 	o = Loan{
@@ -987,40 +987,23 @@ type Ticker struct {
 type TickerUpdate Ticker
 type TickerSnapshot []Ticker
 
-//type Trade struct {
-//ID     int64
-//MTS    int64
-//Amount float64
-//Price  float64
-//Rate   float64
-//Period int64
-//}
-
-func NewTickerFromRaw(raw []interface{}) (t Ticker, err error) {
-	if len(raw) < 26 {
-		return t, fmt.Errorf("data slice too short for ticker: %#v", raw)
+func NewTickerFromRaw(symbol string, raw []interface{}) (t Ticker, err error) {
+	if len(raw) < 10 {
+		return t, fmt.Errorf("data slice too short for ticker, expected %d got %d: %#v", 10, len(raw), raw)
 	}
 
-	t = Ticker{ /*
-		ID:            int64(f64ValOrZero(raw[0])),
-		GID:           int64(f64ValOrZero(raw[1])),
-		CID:           int64(f64ValOrZero(raw[2])),
-		Symbol:        sValOrEmpty(raw[3]),
-		MTSCreated:    int64(f64ValOrZero(raw[4])),
-		MTSUpdated:    int64(f64ValOrZero(raw[5])),
-		Amount:        f64ValOrZero(raw[6]),
-		AmountOrig:    f64ValOrZero(raw[7]),
-		Type:          sValOrEmpty(raw[8]),
-		TypePrev:      sValOrEmpty(raw[9]),
-		Flags:         i64ValOrZero(raw[12]),
-		Status:        OrderStatus(sValOrEmpty(raw[13])),
-		Price:         f64ValOrZero(raw[16]),
-		PriceAvg:      f64ValOrZero(raw[17]),
-		PriceTrailing: f64ValOrZero(raw[18]),
-		PriceAuxLimit: f64ValOrZero(raw[19]),
-		Notify:        bValOrFalse(raw[23]),
-		Hidden:        bValOrFalse(raw[24]),
-		PlacedID:      i64ValOrZero(raw[25]),*/
+	t = Ticker{
+		Symbol:          symbol,
+		Bid:             f64ValOrZero(raw[0]),
+		BidSize:         f64ValOrZero(raw[1]),
+		Ask:             f64ValOrZero(raw[2]),
+		AskSize:         f64ValOrZero(raw[3]),
+		DailyChange:     f64ValOrZero(raw[4]),
+		DailyChangePerc: f64ValOrZero(raw[5]),
+		LastPrice:       f64ValOrZero(raw[6]),
+		Volume:          f64ValOrZero(raw[7]),
+		High:            f64ValOrZero(raw[8]),
+		Low:             f64ValOrZero(raw[9]),
 	}
 
 	return

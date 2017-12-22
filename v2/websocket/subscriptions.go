@@ -33,7 +33,7 @@ type unsubscribeRequest struct {
 	ChanID int64  `json:"chanId"`
 }
 
-type messageFactory func(raw []interface{}) (interface{}, error)
+type messageFactory func(chanID int64, raw []interface{}) (interface{}, error)
 
 type subscription struct {
 	ChanID  int64
@@ -117,6 +117,7 @@ func (s *subscriptions) activate(subID string, chanID int64) error {
 	defer s.lock.Unlock()
 	if sub, ok := s.subsBySubID[subID]; ok {
 		sub.pending = false
+		sub.ChanID = chanID
 		s.subsByChanID[chanID] = sub
 		return nil
 	}

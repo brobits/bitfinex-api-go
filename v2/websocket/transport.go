@@ -30,6 +30,7 @@ type ws struct {
 	TLSSkipVerify bool
 	timeout       int64
 	downstream    chan []byte
+	userShutdown  bool
 
 	shutdown chan struct{} // signal to kill looping goroutines
 	finished chan error    // signal to parent with error, if applicable
@@ -41,6 +42,7 @@ func (w *ws) connect() error {
 	}
 	w.wsLock.Lock()
 	defer w.wsLock.Unlock()
+	w.userShutdown = false
 	var d = websocket.Dialer{
 		Subprotocols:    []string{"p1", "p2"},
 		ReadBufferSize:  1024,
@@ -85,9 +87,7 @@ func (w *ws) send(ctx context.Context, msg interface{}) error {
 	defer w.wsLock.Unlock()
 	err = w.ws.WriteMessage(websocket.TextMessage, bs)
 	if err != nil {
-		w.close()
-		w.finished <- err // signal parent write failure
-		close(w.finished)
+		w.cleanup(err)
 		return err
 	}
 
@@ -116,9 +116,7 @@ func (w *ws) listenWs() {
 
 		_, msg, err := w.ws.ReadMessage()
 		if err != nil {
-			w.close()
-			w.finished <- err
-			close(w.finished) // signal parent read failure
+			w.cleanup(err)
 			return
 		}
 
@@ -130,16 +128,24 @@ func (w *ws) listen() <-chan []byte {
 	return w.downstream
 }
 
+func (w *ws) cleanup(err error) {
+	close(w.downstream) // shut down caller's listen channel
+	close(w.shutdown)   // signal to kill goroutines
+	if err != nil && !w.userShutdown {
+		w.finished <- err
+	}
+	close(w.finished) // signal to parent listeners
+}
+
 // Close the websocket connection
 func (w *ws) close() {
 	w.wsLock.Lock()
+	w.userShutdown = true
 	if w.ws != nil {
-		if err := w.ws.Close(); err != nil {
+		if err := w.ws.Close(); err != nil { // will trigger cleanup()
 			log.Printf("[INFO]: error closing websocket: %s", err)
 		}
 		w.ws = nil
 	}
 	w.wsLock.Unlock()
-	close(w.downstream) // shut down caller's listen channel
-	close(w.shutdown)   // signal to kill goroutines
 }

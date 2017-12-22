@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
@@ -55,19 +56,28 @@ func (c *Client) handleChannel(msg []byte) error {
 		// unauthenticated data slice
 		// 'data' is data slice
 		// 'public' data
-		// returns []interface{} (which is really [][]float64)
+		// returns interface{} (which is really [][]float64)
 		obj, err := c.processDataSlice(data)
 		if err != nil {
 			return err
 		}
 		// public data is returned as raw interface arrays, use a factory to convert to raw type & publish
 		if factory, ok := c.factories[sub.Request.Channel]; ok {
-			msg, err := factory(obj)
-			if err != nil {
-				// factory error
-				return err
+			flt := obj.([][]float64)
+			if len(flt) >= 1 {
+				arr := make([]interface{}, len(flt[0]))
+				for i, ft := range flt[0] {
+					arr[i] = ft
+				}
+				msg, err := factory(chanID, arr)
+				if err != nil {
+					// factory error
+					return err
+				}
+				c.listener <- msg
+			} else {
+				log.Printf("data too small to process: %#v", obj)
 			}
-			c.listener <- msg
 		} else {
 			// factory lookup error
 			return fmt.Errorf("could not find public factory for %s channel", sub.Request.Channel)
@@ -86,33 +96,7 @@ type unsubscribeMsg struct {
 	ChanID int64  `json:"chanId"`
 }
 
-// inputs: [ChanID, [Data]], [ChanID, "hb"]
-func (c *Client) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
-	switch len(raw) {
-	case 2:
-		// [ChanID, [Data]] or [ChanID, "hb"]
-		// Data can be either []float64 or [][]float64, where the former should be
-		// representing an update and the latter a snapshot.
-		// Simple update/snapshot for ticker, books, raw books and candles.
-		switch fp := raw[1].(type) {
-		case []interface{}:
-			return c.processDataSlice(fp)
-		case string: // This should be a heartbeat.
-			return bitfinex.Heartbeat{}, nil
-		}
-	case 3:
-		// [ChanID, MsgType, [Data]]
-		// Data can be either []float64 or [][]float64, where the former should be
-		// representing an update and the latter a snapshot.
-		if fp, ok := raw[2].([]interface{}); ok {
-			return c.processDataSlice(fp)
-		}
-	}
-
-	return nil, fmt.Errorf("unexpected data message: %#v", raw)
-}
-
-func (c *Client) processDataSlice(data []interface{}) ([]interface{}, error) {
+func (c *Client) processDataSlice(data []interface{}) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}
@@ -141,12 +125,7 @@ func (c *Client) processDataSlice(data []interface{}) ([]interface{}, error) {
 		return nil, fmt.Errorf("unexpected data slice: %v", data)
 	}
 
-	// cast from [][]float64 to []interface{}
-	cast := make([]interface{}, len(items))
-	for i, v := range items {
-		cast[i] = v
-	}
-	return cast, nil
+	return items, nil
 }
 
 // public msg: [ChanID, [Data]]

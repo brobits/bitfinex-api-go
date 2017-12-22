@@ -17,6 +17,7 @@ func (c *Client) SubscribeTicker(ctx context.Context, symbol string) (string, er
 		Channel: ChanTicker,
 		Symbol:  symbol,
 	}
+	c.subscriptions.add(req)
 	err := c.Asynchronous.send(ctx, req)
 	if err != nil {
 		// propagate send error
@@ -33,6 +34,7 @@ func (c *Client) SubscribeTrades(ctx context.Context, symbol string) (string, er
 		Channel: ChanTrades,
 		Symbol:  symbol,
 	}
+	c.subscriptions.add(req)
 	err := c.send(ctx, req)
 	if err != nil {
 		// propagate send error
@@ -49,6 +51,7 @@ func (c *Client) SubscribeBook(ctx context.Context, symbol string) (string, erro
 		Channel: ChanBook,
 		Symbol:  symbol,
 	}
+	c.subscriptions.add(req)
 	err := c.send(ctx, req)
 	if err != nil {
 		// propagate send error
@@ -65,6 +68,7 @@ func (c *Client) SubscribeCandles(ctx context.Context, symbol string, resolution
 		Channel: ChanCandles,
 		Key:     fmt.Sprintf("trade:%s:%s", resolution, symbol),
 	}
+	c.subscriptions.add(req)
 	err := c.send(ctx, req)
 	if err != nil {
 		// propagate send error
