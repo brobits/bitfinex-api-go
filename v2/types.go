@@ -2,7 +2,19 @@ package bitfinex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
+)
+
+// Prefixes for available pairs
+const (
+	FundingPrefix = "f"
+	TradingPrefix = "t"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 // Candle resolutions
@@ -21,11 +33,52 @@ const (
 	OneMonth       CandleResolution = "1M"
 )
 
+func CandleResolutionFromString(str string) (CandleResolution, error) {
+	switch str {
+	case string(OneMinute):
+		return OneMinute, nil
+	case string(FiveMinutes):
+		return FiveMinutes, nil
+	case string(FifteenMinutes):
+		return FifteenMinutes, nil
+	case string(ThirtyMinutes):
+		return ThirtyMinutes, nil
+	case string(OneHour):
+		return OneHour, nil
+	case string(ThreeHours):
+		return ThreeHours, nil
+	case string(SixHours):
+		return SixHours, nil
+	case string(TwelveHours):
+		return TwelveHours, nil
+	case string(OneDay):
+		return OneDay, nil
+	case string(OneWeek):
+		return OneWeek, nil
+	case string(TwoWeeks):
+		return TwoWeeks, nil
+	case string(OneMonth):
+		return OneMonth, nil
+	}
+	return OneMinute, fmt.Errorf("could not convert string to resolution: %s", str)
+}
+
 // private type--cannot instantiate.
 type candleResolution string
 
 // CandleResolution provides a typed set of resolutions for candle subscriptions.
 type CandleResolution candleResolution
+
+// Order sides
+const (
+	Bid OrderSide = 1
+	Ask OrderSide = 2
+)
+
+type orderSide byte
+
+// OrderSide provides a typed set of order sides.
+type OrderSide orderSide
 
 // OrderNewRequest represents an order to be posted to the bitfinex websocket
 // service.
@@ -303,37 +356,24 @@ func NewPositionSnapshotFromRaw(raw []interface{}) (ps PositionSnapshot, err err
 	return
 }
 
+// Trade represents a trade on the public data feed.
 type Trade struct {
-	ID          int64
-	Pair        string
-	MTSCreate   int64
-	OrderID     int64
-	ExecAmout   float64
-	ExecPrice   float64
-	OrderType   string
-	OrderPrice  float64
-	Maker       bool
-	Fee         float64
-	FeeCurrency string
+	ID     int64
+	MTS    uint64
+	Amount float64
+	Price  float64
 }
 
 func NewTradeFromRaw(raw []interface{}) (o Trade, err error) {
-	if len(raw) < 11 {
+	if len(raw) < 4 {
 		return o, fmt.Errorf("data slice too short for trade: %#v", raw)
 	}
 
 	o = Trade{
-		ID:          i64ValOrZero(raw[0]),
-		Pair:        sValOrEmpty(raw[1]),
-		MTSCreate:   i64ValOrZero(raw[2]),
-		OrderID:     i64ValOrZero(raw[3]),
-		ExecAmout:   f64ValOrZero(raw[4]),
-		ExecPrice:   f64ValOrZero(raw[5]),
-		OrderType:   sValOrEmpty(raw[6]),
-		OrderPrice:  f64ValOrZero(raw[7]),
-		Maker:       bValOrFalse(raw[8]),
-		Fee:         f64ValOrZero(raw[9]),
-		FeeCurrency: sValOrEmpty(raw[10]),
+		ID:     i64ValOrZero(raw[0]),
+		MTS:    ui64ValOrZero(raw[1]),
+		Amount: f64ValOrZero(raw[2]),
+		Price:  f64ValOrZero(raw[3]),
 	}
 
 	return
@@ -366,33 +406,26 @@ func NewTradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 	return
 }
 
+// TradeExecution represents a trade on the public data feed.
 type TradeExecution struct {
-	ID         int64
-	Pair       string
-	MTSCreate  int64
-	OrderID    int64
-	ExecAmout  float64
-	ExecPrice  float64
-	OrderType  string
-	OrderPrice float64
-	Maker      bool
+	ID     int64
+	MTS    uint64
+	Amount float64
+	Price  float64
 }
 
 func NewTradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
-	if len(raw) < 9 {
+	if len(raw) < 4 {
 		return o, fmt.Errorf("data slice too short for trade execution: %#v", raw)
 	}
 
+	log.Printf("TradeExecution: %#v", raw)
+
 	o = TradeExecution{
-		ID:         i64ValOrZero(raw[0]),
-		Pair:       sValOrEmpty(raw[1]),
-		MTSCreate:  i64ValOrZero(raw[2]),
-		OrderID:    i64ValOrZero(raw[3]),
-		ExecAmout:  f64ValOrZero(raw[4]),
-		ExecPrice:  f64ValOrZero(raw[5]),
-		OrderType:  sValOrEmpty(raw[6]),
-		OrderPrice: f64ValOrZero(raw[7]),
-		Maker:      bValOrFalse(raw[8]),
+		ID:     i64ValOrZero(raw[0]),
+		MTS:    ui64ValOrZero(raw[1]),
+		Amount: f64ValOrZero(raw[2]),
+		Price:  f64ValOrZero(raw[3]),
 	}
 
 	return
@@ -1004,6 +1037,69 @@ func NewTickerFromRaw(symbol string, raw []interface{}) (t Ticker, err error) {
 		Volume:          f64ValOrZero(raw[7]),
 		High:            f64ValOrZero(raw[8]),
 		Low:             f64ValOrZero(raw[9]),
+	}
+
+	return
+}
+
+// BookUpdate represents an order book price update.
+type BookUpdate struct {
+	Symbol string
+	Price  float64
+	Count  int64
+	Amount float64
+	Side   OrderSide
+}
+
+func NewBookUpdateFromRaw(symbol string, raw []interface{}) (b BookUpdate, err error) {
+	if len(raw) < 3 {
+		return b, fmt.Errorf("data slice too short for book update, expected %d got %d: %#v", 5, len(raw), raw)
+	}
+
+	amt := f64ValOrZero(raw[2])
+	var side OrderSide
+	if amt > 0 {
+		side = Bid
+	} else {
+		side = Ask
+	}
+
+	b = BookUpdate{
+		Symbol: symbol,
+		Price:  f64ValOrZero(raw[0]),
+		Count:  i64ValOrZero(raw[1]),
+		Amount: amt,
+		Side:   side,
+	}
+
+	return
+}
+
+type Candle struct {
+	Symbol     string
+	Resolution CandleResolution
+	MTS        int64
+	Open       float64
+	Close      float64
+	High       float64
+	Low        float64
+	Volume     float64
+}
+
+func NewCandleFromRaw(symbol string, resolution CandleResolution, raw []interface{}) (c Candle, err error) {
+	if len(raw) < 6 {
+		return c, fmt.Errorf("data slice too short for candle, expected %d got %d: %#v", 6, len(raw), raw)
+	}
+
+	c = Candle{
+		Symbol:     symbol,
+		Resolution: resolution,
+		MTS:        i64ValOrZero(raw[0]),
+		Open:       f64ValOrZero(raw[1]),
+		Close:      f64ValOrZero(raw[2]),
+		High:       f64ValOrZero(raw[3]),
+		Low:        f64ValOrZero(raw[4]),
+		Volume:     f64ValOrZero(raw[5]),
 	}
 
 	return

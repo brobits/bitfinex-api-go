@@ -97,14 +97,21 @@ func TestPublicTrades(t *testing.T) {
 
 	errch := make(chan error)
 	go func() {
-		select {
-		case msg := <-c.Listen():
-			switch msg.(type) {
-			case error:
-				errch <- msg.(error)
-			default:
+		for {
+			select {
+			case msg := <-c.Listen():
+				if msg == nil {
+					return
+				}
+				log.Printf("recv msg: %#v", msg)
+				switch msg.(type) {
+				case error:
+					errch <- msg.(error)
+				default:
+					t.Logf("test recv: %#v", msg)
+				}
+				wg.Done()
 			}
-			wg.Done()
 		}
 	}()
 
@@ -144,14 +151,21 @@ func TestPublicBooks(t *testing.T) {
 
 	errch := make(chan error)
 	go func() {
-		select {
-		case msg := <-c.Listen():
-			switch msg.(type) {
-			case error:
-				errch <- msg.(error)
-			default:
+		for {
+			select {
+			case msg := <-c.Listen():
+				if msg == nil {
+					return
+				}
+				log.Printf("recv msg: %#v", msg)
+				switch msg.(type) {
+				case error:
+					errch <- msg.(error)
+				default:
+					t.Logf("test recv: %#v", msg)
+				}
+				wg.Done()
 			}
-			wg.Done()
 		}
 	}()
 
@@ -191,14 +205,21 @@ func TestPublicCandles(t *testing.T) {
 
 	errch := make(chan error)
 	go func() {
-		select {
-		case msg := <-c.Listen():
-			switch msg.(type) {
-			case error:
-				errch <- msg.(error)
-			default:
+		for {
+			select {
+			case msg := <-c.Listen():
+				if msg == nil {
+					return
+				}
+				log.Printf("recv msg: %#v", msg)
+				switch msg.(type) {
+				case error:
+					errch <- msg.(error)
+				default:
+					t.Logf("test recv: %#v", msg)
+				}
+				wg.Done()
 			}
-			wg.Done()
 		}
 	}()
 

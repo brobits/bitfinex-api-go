@@ -119,7 +119,6 @@ func (w *ws) listenWs() {
 			w.cleanup(err)
 			return
 		}
-
 		w.downstream <- msg
 	}
 }

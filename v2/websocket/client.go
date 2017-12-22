@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -108,6 +109,28 @@ func NewClientWithURL(url string) *Client {
 		listener:       make(chan interface{}),
 		subscriptions:  newSubscriptions(),
 	}
+	c.registerFactories()
+	// wait for shutdown signals from child & caller
+	go c.listenDisconnect()
+	return c
+}
+
+func extractSymbolResolutionFromKey(subscription string) (symbol string, resolution bitfinex.CandleResolution, err error) {
+	var res, sym string
+	str := strings.Split(subscription, ":")
+	if len(str) < 3 {
+		return "", resolution, fmt.Errorf("could not convert symbol resolution for %s: len %d", subscription, len(str))
+	}
+	res = str[1]
+	sym = str[2]
+	resolution, err = bitfinex.CandleResolutionFromString(res)
+	if err != nil {
+		return "", resolution, err
+	}
+	return sym, resolution, nil
+}
+
+func (c *Client) registerFactories() {
 	c.registerFactory(ChanTicker, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
 		sub, err := c.subscriptions.lookupByChannelID(chanID)
 		if err == nil {
@@ -115,9 +138,27 @@ func NewClientWithURL(url string) *Client {
 		}
 		return nil, err
 	})
-	// wait for shutdown signals from child & caller
-	go c.listenDisconnect()
-	return c
+	c.registerFactory(ChanTrades, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
+		return bitfinex.NewTradeSnapshotFromRaw(raw)
+	})
+	c.registerFactory(ChanBook, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
+		sub, err := c.subscriptions.lookupByChannelID(chanID)
+		if err == nil {
+			return bitfinex.NewBookUpdateFromRaw(sub.Request.Symbol, raw)
+		}
+		return nil, err
+	})
+	c.registerFactory(ChanCandles, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
+		sub, err := c.subscriptions.lookupByChannelID(chanID)
+		if err != nil {
+			return nil, err
+		}
+		sym, res, err := extractSymbolResolutionFromKey(sub.Request.Key)
+		if err != nil {
+			return nil, err
+		}
+		return bitfinex.NewCandleFromRaw(sym, res, raw)
+	})
 }
 
 // NewClient creates a new default client.

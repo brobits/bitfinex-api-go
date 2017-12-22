@@ -43,7 +43,7 @@ func (c *Client) handleChannel(msg []byte) error {
 			// 'private' data
 			if len(raw) > 2 {
 				if arr, ok := raw[2].([]interface{}); ok {
-					obj, err := c.handlePrivateDataMessage(arr)
+					obj, err := c.handlePrivateDataMessage(raw[1].(string), arr)
 					if err != nil {
 						return err
 					}
@@ -131,27 +131,28 @@ func (c *Client) processDataSlice(data []interface{}) (interface{}, error) {
 // public msg: [ChanID, [Data]]
 // hb (both): [ChanID, "hb"]
 // private msg: [ChanID, "type", [Data]]
-func (c *Client) handlePrivateDataMessage(data []interface{}) (ms interface{}, err error) {
+func (c *Client) handlePrivateDataMessage(term string, data []interface{}) (ms interface{}, err error) {
 	if len(data) < 2 {
 		return ms, fmt.Errorf("data message too short: %#v", data)
 	}
-
-	term, ok := data[1].(string)
-	if !ok {
-		return ms, fmt.Errorf("expected data term string in second position but got %#v in %#v", data[1], data)
-	}
-
-	if len(data) == 2 || term == "hb" { // Heartbeat
+	/*
+		term, ok := data[1].(string)
+		// TODO trades violating the following check
+		if !ok {
+			return ms, fmt.Errorf("expected data term string in second position but got %#v in %#v", data[1], data)
+		}
+	*/
+	if len(data) == 1 || term == "hb" { // Heartbeat
 		// TODO: Consider adding a switch to enable/disable passing these along.
 		return bitfinex.Heartbeat{}, nil
 	}
-
-	list, ok := data[2].([]interface{})
-	if !ok {
-		return ms, fmt.Errorf("expected data list in third position but got %#v in %#v", data[2], data)
-	}
-
-	ms = c.convertRaw(term, list)
+	/*
+		list, ok := data[2].([]interface{})
+		if !ok {
+			return ms, fmt.Errorf("expected data list in third position but got %#v in %#v", data[2], data)
+		}
+	*/
+	ms = c.convertRaw(term, data)
 
 	return
 }

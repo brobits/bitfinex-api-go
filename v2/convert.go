@@ -35,6 +35,13 @@ func i64pValOrNil(i interface{}) *int64 {
 	return nil
 }
 
+func ui64ValOrZero(i interface{}) uint64 {
+	if r, ok := i.(uint64); ok {
+		return r
+	}
+	return 0
+}
+
 func f64ValOrZero(i interface{}) float64 {
 	if r, ok := i.(float64); ok {
 		return r
