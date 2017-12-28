@@ -32,13 +32,13 @@ func TestWebsocketOrder(t *testing.T) {
 	go func() {
 		for ev := range c.Listen() {
 			switch e := ev.(type) {
-			case bitfinex.Notification:
+			case *bitfinex.Notification:
 				if e.Status == "ERROR" && e.Type == "on-req" {
 					t.Errorf("failed to create order: %s", e.Text)
 				}
-			case bitfinex.OrderNew:
+			case *bitfinex.OrderNew:
 				wg.Done()
-			case bitfinex.OrderCancel:
+			case *bitfinex.OrderCancel:
 				wg.Done()
 			case error:
 				t.Logf("Listen() error: %s", ev)

@@ -12,13 +12,13 @@ import (
 // SubscribeTicker sends a subscription request for the ticker.
 func (c *Client) SubscribeTicker(ctx context.Context, symbol string) (string, error) {
 	req := &subscriptionRequest{
-		SubID:   c.subscriptions.nextSubID(),
+		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanTicker,
 		Symbol:  symbol,
 	}
 	c.subscriptions.add(req)
-	err := c.Asynchronous.send(ctx, req)
+	err := c.asynchronous.Send(ctx, req)
 	if err != nil {
 		// propagate send error
 		return "", err
@@ -29,13 +29,13 @@ func (c *Client) SubscribeTicker(ctx context.Context, symbol string) (string, er
 // SubscribeTrades sends a subscription request for the trade feed.
 func (c *Client) SubscribeTrades(ctx context.Context, symbol string) (string, error) {
 	req := &subscriptionRequest{
-		SubID:   c.subscriptions.nextSubID(),
+		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanTrades,
 		Symbol:  symbol,
 	}
 	c.subscriptions.add(req)
-	err := c.send(ctx, req)
+	err := c.asynchronous.Send(ctx, req)
 	if err != nil {
 		// propagate send error
 		return "", err
@@ -46,13 +46,13 @@ func (c *Client) SubscribeTrades(ctx context.Context, symbol string) (string, er
 // SubscribeBook sends a subscription request for market data.
 func (c *Client) SubscribeBook(ctx context.Context, symbol string) (string, error) {
 	req := &subscriptionRequest{
-		SubID:   c.subscriptions.nextSubID(),
+		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanBook,
 		Symbol:  symbol,
 	}
 	c.subscriptions.add(req)
-	err := c.send(ctx, req)
+	err := c.asynchronous.Send(ctx, req)
 	if err != nil {
 		// propagate send error
 		return "", err
@@ -63,13 +63,13 @@ func (c *Client) SubscribeBook(ctx context.Context, symbol string) (string, erro
 // SubscribeCandles sends a subscription request for OHLC candles.
 func (c *Client) SubscribeCandles(ctx context.Context, symbol string, resolution bitfinex.CandleResolution) (string, error) {
 	req := &subscriptionRequest{
-		SubID:   c.subscriptions.nextSubID(),
+		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanCandles,
 		Key:     fmt.Sprintf("trade:%s:%s", resolution, symbol),
 	}
 	c.subscriptions.add(req)
-	err := c.send(ctx, req)
+	err := c.asynchronous.Send(ctx, req)
 	if err != nil {
 		// propagate send error
 		return "", err
@@ -79,10 +79,10 @@ func (c *Client) SubscribeCandles(ctx context.Context, symbol string, resolution
 
 // SubmitOrder sends an order request.
 func (c *Client) SubmitOrder(ctx context.Context, order *bitfinex.OrderNewRequest) error {
-	return c.send(ctx, order)
+	return c.asynchronous.Send(ctx, order)
 }
 
 // SubmitCancel sends a cancel request.
 func (c *Client) SubmitCancel(ctx context.Context, cancel *bitfinex.OrderCancelRequest) error {
-	return c.send(ctx, cancel)
+	return c.asynchronous.Send(ctx, cancel)
 }

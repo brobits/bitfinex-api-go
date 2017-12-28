@@ -48,7 +48,7 @@ func (c *Client) handleChannel(msg []byte) error {
 						return err
 					}
 					// private data is returned as strongly typed data, publish directly
-					c.listener <- obj
+					c.listener <- &obj
 				}
 			}
 		}
@@ -74,12 +74,13 @@ func (c *Client) handleChannel(msg []byte) error {
 					// factory error
 					return err
 				}
-				c.listener <- msg
+				c.listener <- &msg
 			} else {
 				log.Printf("data too small to process: %#v", obj)
 			}
 		} else {
 			// factory lookup error
+			log.Printf("could not find public factory for %s channel", sub.Request.Channel)
 			return fmt.Errorf("could not find public factory for %s channel", sub.Request.Channel)
 		}
 	}

@@ -3,8 +3,6 @@ package websocket
 import (
 	"fmt"
 	"sync"
-
-	"github.com/bitfinexcom/bitfinex-api-go/utils"
 )
 
 type subscriptionRequest struct {
@@ -69,10 +67,6 @@ type subscriptions struct {
 
 	subsBySubID  map[string]*subscription // subscription map indexed by subscription ID
 	subsByChanID map[int64]*subscription  // subscription map indexed by channel ID
-}
-
-func (s *subscriptions) nextSubID() string {
-	return utils.GetNonce()
 }
 
 func (s *subscriptions) add(sub *subscriptionRequest) *subscription {

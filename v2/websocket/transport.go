@@ -36,7 +36,7 @@ type ws struct {
 	finished chan error    // signal to parent with error, if applicable
 }
 
-func (w *ws) connect() error {
+func (w *ws) Connect() error {
 	if w.ws != nil {
 		return nil // no op
 	}
@@ -65,7 +65,7 @@ func (w *ws) connect() error {
 // Send marshals the given interface and then sends it to the API. This method
 // can block so specify a context with timeout if you don't want to wait for too
 // long.
-func (w *ws) send(ctx context.Context, msg interface{}) error {
+func (w *ws) Send(ctx context.Context, msg interface{}) error {
 	if w.ws == nil {
 		return ErrWSNotConnected
 	}
@@ -94,7 +94,7 @@ func (w *ws) send(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func (w *ws) done() <-chan error {
+func (w *ws) Done() <-chan error {
 	return w.finished
 }
 
@@ -119,11 +119,12 @@ func (w *ws) listenWs() {
 			w.cleanup(err)
 			return
 		}
+		log.Print(msg)
 		w.downstream <- msg
 	}
 }
 
-func (w *ws) listen() <-chan []byte {
+func (w *ws) Listen() <-chan []byte {
 	return w.downstream
 }
 
@@ -137,7 +138,7 @@ func (w *ws) cleanup(err error) {
 }
 
 // Close the websocket connection
-func (w *ws) close() {
+func (w *ws) Close() {
 	w.wsLock.Lock()
 	w.userShutdown = true
 	if w.ws != nil {

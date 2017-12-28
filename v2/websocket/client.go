@@ -57,11 +57,11 @@ type AuthState authState // prevent user construction of authStates
 
 // Asynchronous interface decouples the underlying transport from API logic.
 type Asynchronous interface {
-	connect() error
-	send(ctx context.Context, msg interface{}) error
-	listen() <-chan []byte
-	close()
-	done() <-chan error
+	Connect() error
+	Send(ctx context.Context, msg interface{}) error
+	Listen() <-chan []byte
+	Close()
+	Done() <-chan error
 }
 
 // Client provides a unified interface for users to interact with the Bitfinex V2 Websocket API.
@@ -70,7 +70,8 @@ type Client struct {
 	apiKey         string
 	apiSecret      string
 	Authentication AuthState
-	Asynchronous
+	asynchronous   Asynchronous
+	nonce          utils.NonceGenerator
 
 	// subscription manager
 	subscriptions *subscriptions
@@ -101,13 +102,24 @@ func (c *Client) registerFactory(channel string, factory messageFactory) {
 
 // NewClientWithURL creates a new default client with a given API endpoint.
 func NewClientWithURL(url string) *Client {
+	return NewClientWithAsync(newWs(url))
+}
+
+// NewClientWithAsync creates a new default client with a given asynchronous transport interface.
+func NewClientWithAsync(async Asynchronous) *Client {
+	return NewClientWithAsyncNonce(async, utils.NewEpochNonceGenerator())
+}
+
+// NewClientWithAsync creates a new client with a given asynchronous transport and nonce generator interfaces.
+func NewClientWithAsyncNonce(async Asynchronous, nonce utils.NonceGenerator) *Client {
 	c := &Client{
-		Asynchronous:   newWs(url),
+		asynchronous:   async,
 		shutdown:       make(chan bool),
 		Authentication: NoAuthentication,
 		factories:      make(map[string]messageFactory),
 		listener:       make(chan interface{}),
 		subscriptions:  newSubscriptions(),
+		nonce:          nonce,
 	}
 	c.registerFactories()
 	// wait for shutdown signals from child & caller
@@ -168,7 +180,7 @@ func NewClient() *Client {
 
 // Connect to the Bitfinex API.
 func (c *Client) Connect() error {
-	err := c.Asynchronous.connect()
+	err := c.asynchronous.Connect()
 	if err == nil {
 		go c.listenUpstream()
 	}
@@ -178,7 +190,7 @@ func (c *Client) Connect() error {
 func (c *Client) listenDisconnect() {
 	// block until finished
 	select {
-	case err := <-c.Asynchronous.done(): // child shutdown
+	case err := <-c.asynchronous.Done(): // child shutdown
 		c.close(err)
 		return
 	case <-c.shutdown: // normal shutdown
@@ -191,7 +203,7 @@ func (c *Client) listenUpstream() {
 		select {
 		case <-c.shutdown:
 			return
-		case msg := <-c.Asynchronous.listen():
+		case msg := <-c.asynchronous.Listen():
 			if msg != nil {
 				// Errors here should be non critical so we just log them.
 				err := c.handleMessage(msg)
@@ -226,7 +238,7 @@ func (c *Client) Listen() <-chan interface{} {
 // Close will close the Done() channel.
 func (c *Client) Close() {
 	// close transport
-	c.Asynchronous.close() // will trigger a close()
+	c.asynchronous.Close() // will trigger a close()
 }
 
 func (c *Client) handleMessage(msg []byte) error {
@@ -244,7 +256,7 @@ func (c *Client) handleMessage(msg []byte) error {
 }
 
 func (c *Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
-	return c.send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
+	return c.asynchronous.Send(ctx, unsubscribeMsg{Event: "unsubscribe", ChanID: id})
 }
 
 func (c *Client) unsubscribeByChanID(ctx context.Context, id int64) error {
@@ -270,7 +282,7 @@ func (c *Client) Unsubscribe(ctx context.Context, id string) error {
 // to the API. The filters will be applied to the authenticated channel, i.e.
 // only subscribe to the filtered messages.
 func (c *Client) Authenticate(ctx context.Context, filter ...string) error {
-	nonce := utils.GetNonce()
+	nonce := c.nonce.GetNonce()
 
 	payload := "AUTH" + nonce
 	s := &subscriptionRequest{
@@ -284,7 +296,7 @@ func (c *Client) Authenticate(ctx context.Context, filter ...string) error {
 	}
 	c.subscriptions.add(s)
 
-	if err := c.send(ctx, s); err != nil {
+	if err := c.asynchronous.Send(ctx, s); err != nil {
 		return err
 	}
 	c.Authentication = PendingAuthentication

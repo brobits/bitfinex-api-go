@@ -83,7 +83,7 @@ func (c *Client) handleEvent(msg []byte) error {
 	case "info":
 		i := InfoEvent{}
 		// TODO e->i
-		c.listener <- i
+		c.listener <- &i
 	case "auth":
 		a := AuthEvent{}
 		err = json.Unmarshal(msg, &a)
@@ -92,7 +92,7 @@ func (c *Client) handleEvent(msg []byte) error {
 		}
 		c.subscriptions.activate(a.SubID, a.ChanID)
 		c.Authentication = SuccessfulAuthentication
-		c.listener <- a
+		c.listener <- &a
 		return nil
 	case "subscribed":
 		s := SubscribeEvent{}
@@ -100,8 +100,11 @@ func (c *Client) handleEvent(msg []byte) error {
 		if err != nil {
 			return err
 		}
-		c.subscriptions.activate(s.SubID, s.ChanID)
-		c.listener <- s
+		err := c.subscriptions.activate(s.SubID, s.ChanID)
+		if err != nil {
+			return err
+		}
+		c.listener <- &s
 		return nil
 	case "unsubscribed":
 		s := UnsubscribeEvent{}
@@ -111,15 +114,15 @@ func (c *Client) handleEvent(msg []byte) error {
 		}
 		log.Print("got unsubscribed msg from bfx api")
 		c.subscriptions.removeByChanID(s.ChanID)
-		c.listener <- s
+		c.listener <- &s
 	case "error":
 		er := ErrorEvent{}
 		// TODO e->er
-		c.listener <- er
+		c.listener <- &er
 	case "conf":
 		ec := ConfEvent{}
 		// TODO e->ec
-		c.listener <- ec
+		c.listener <- &ec
 	default:
 		return fmt.Errorf("unknown event: %s", msg) // TODO: or just log?
 	}
