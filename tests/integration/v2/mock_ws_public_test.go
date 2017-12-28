@@ -9,12 +9,8 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 )
 
+// method of testing with mocked endpoints
 func TestTicker(t *testing.T) {
-	// test setup
-	rawInfoEvent := []byte{123, 34, 101, 118, 101, 110, 116, 34, 58, 34, 105, 110, 102, 111, 34, 44, 34, 118, 101, 114, 115, 105, 111, 110, 34, 58, 50, 125}
-	rawSubAck := []byte{123, 34, 101, 118, 101, 110, 116, 34, 58, 34, 115, 117, 98, 115, 99, 114, 105, 98, 101, 100, 34, 44, 34, 99, 104, 97, 110, 110, 101, 108, 34, 58, 34, 116, 105, 99, 107, 101, 114, 34, 44, 34, 99, 104, 97, 110, 73, 100, 34, 58, 53, 44, 34, 115, 121, 109, 98, 111, 108, 34, 58, 34, 116, 66, 84, 67, 85, 83, 68, 34, 44, 34, 115, 117, 98, 73, 100, 34, 58, 34, 49, 53, 49, 52, 52, 48, 49, 49, 55, 51, 48, 48, 49, 34, 44, 34, 112, 97, 105, 114, 34, 58, 34, 66, 84, 67, 85, 83, 68, 34, 125}
-	rawTick := []byte{91, 53, 44, 91, 49, 52, 57, 53, 55, 44, 54, 56, 46, 49, 55, 51, 50, 56, 55, 57, 54, 44, 49, 52, 57, 53, 56, 44, 53, 53, 46, 50, 57, 53, 56, 56, 49, 51, 50, 44, 45, 54, 53, 57, 44, 45, 48, 46, 48, 52, 50, 50, 44, 49, 52, 57, 55, 49, 44, 53, 51, 55, 50, 51, 46, 48, 56, 56, 49, 51, 57, 57, 53, 44, 49, 54, 52, 57, 52, 44, 49, 52, 52, 53, 52, 93, 93}
-
 	// create transport & nonce mocks
 	async := newTestAsync()
 	nonce := &MockNonceGenerator{}
@@ -32,20 +28,20 @@ func TestTicker(t *testing.T) {
 	defer ws.Close()
 
 	// begin test
-	async.Publish(rawInfoEvent)
+	async.Publish(`{"event":"info","version":2}`)
 	nonce.Next("1514401173001")
 	ev, err := listener.nextInfoEvent()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert(t, &websocket.InfoEvent{}, ev)
+	assert(t, &websocket.InfoEvent{Version: 2}, ev)
 
 	// subscribe
 	id, err := ws.SubscribeTicker(context.Background(), "tBTCUSD")
 	if err != nil {
 		t.Fatal(err)
 	}
-	async.Publish(rawSubAck)
+	async.Publish(`{"event":"subscribed","channel":"ticker","chanId":5,"symbol":"tBTCUSD","subId":"1514401173001","pair":"BTCUSD"}`)
 	sub, err := listener.nextSubscriptionEvent()
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +54,7 @@ func TestTicker(t *testing.T) {
 		Pair:    "BTCUSD",
 	}, sub)
 
-	async.Publish(rawTick)
+	async.Publish(`[5,[14957,68.17328796,14958,55.29588132,-659,-0.0422,14971,53723.08813995,16494,14454]]`)
 	tick, err := listener.nextTick()
 	if err != nil {
 		t.Fatal(err)
@@ -79,13 +75,10 @@ func TestTicker(t *testing.T) {
 
 	// unsubscribe
 	ws.Unsubscribe(context.Background(), id)
-	/*
-		TODO
-		async.Publish(rawUnsubAck)
-		unsub, err := listener.nextUnsubscriptionEvent()
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert(t, &websocket.UnsubscribeEvent{}, unsub)
-	*/
+	async.Publish(`{"event":"unsubscribed","chanId":5,"status":"OK"}`)
+	unsub, err := listener.nextUnsubscriptionEvent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert(t, &websocket.UnsubscribeEvent{ChanID: 5, Status: "OK"}, unsub)
 }

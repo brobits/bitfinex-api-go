@@ -41,10 +41,12 @@ func assert(t *testing.T, expected interface{}, actual interface{}) {
 
 		if expTypeField.Name != actTypeField.Name {
 			t.Errorf("expected type %s, got %s", expTypeField.Name, actTypeField.Name)
+			t.Errorf("%#v", actual)
 			t.Fail()
 		}
 		if !isZeroOfUnderlyingType(expValueField.Interface()) && isZeroOfUnderlyingType(actValueField.Interface()) {
 			t.Errorf("expected %s, but was empty", expTypeField.Name)
+			t.Errorf("%#v", actual)
 			t.Fail()
 			return
 		}

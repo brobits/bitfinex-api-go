@@ -3,7 +3,6 @@ package websocket
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 )
 
 type eventType struct {
@@ -82,7 +81,10 @@ func (c *Client) handleEvent(msg []byte) error {
 	switch event.Event {
 	case "info":
 		i := InfoEvent{}
-		// TODO e->i
+		err = json.Unmarshal(msg, &i)
+		if err != nil {
+			return err
+		}
 		c.listener <- &i
 	case "auth":
 		a := AuthEvent{}
@@ -112,7 +114,6 @@ func (c *Client) handleEvent(msg []byte) error {
 		if err != nil {
 			return err
 		}
-		log.Print("got unsubscribed msg from bfx api")
 		c.subscriptions.removeByChanID(s.ChanID)
 		c.listener <- &s
 	case "error":

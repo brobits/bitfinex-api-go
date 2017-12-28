@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"errors"
-	"log"
 )
 
 type TestAsync struct {
@@ -27,14 +26,8 @@ func (t *TestAsync) Listen() <-chan []byte {
 	return t.bridge
 }
 
-func (t *TestAsync) PublishString(raw string) {
-	b := []byte(raw)
-	log.Printf("mock publish:\n%s", b)
-	t.bridge <- b
-}
-
-func (t *TestAsync) Publish(raw []byte) {
-	t.bridge <- raw
+func (t *TestAsync) Publish(raw string) {
+	t.bridge <- []byte(raw)
 }
 
 func (t *TestAsync) Close() {
