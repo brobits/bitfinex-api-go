@@ -74,7 +74,7 @@ func (c *Client) handleChannel(msg []byte) error {
 					// factory error
 					return err
 				}
-				c.listener <- &msg
+				c.listener <- msg
 			} else {
 				log.Printf("data too small to process: %#v", obj)
 			}

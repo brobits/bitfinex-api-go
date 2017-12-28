@@ -146,7 +146,8 @@ func (c *Client) registerFactories() {
 	c.registerFactory(ChanTicker, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
 		sub, err := c.subscriptions.lookupByChannelID(chanID)
 		if err == nil {
-			return bitfinex.NewTickerFromRaw(sub.Request.Symbol, raw)
+			tick, err := bitfinex.NewTickerFromRaw(sub.Request.Symbol, raw)
+			return &tick, err
 		}
 		return nil, err
 	})
@@ -156,7 +157,8 @@ func (c *Client) registerFactories() {
 	c.registerFactory(ChanBook, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
 		sub, err := c.subscriptions.lookupByChannelID(chanID)
 		if err == nil {
-			return bitfinex.NewBookUpdateFromRaw(sub.Request.Symbol, raw)
+			update, err := bitfinex.NewBookUpdateFromRaw(sub.Request.Symbol, raw)
+			return &update, err
 		}
 		return nil, err
 	})
@@ -169,7 +171,8 @@ func (c *Client) registerFactories() {
 		if err != nil {
 			return nil, err
 		}
-		return bitfinex.NewCandleFromRaw(sym, res, raw)
+		book, err := bitfinex.NewCandleFromRaw(sym, res, raw)
+		return &book, err
 	})
 }
 
