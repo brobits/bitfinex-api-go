@@ -27,7 +27,7 @@ func TestTicker(t *testing.T) {
 	ws.Connect()
 	defer ws.Close()
 
-	// begin test
+	// info welcome msg
 	async.Publish(`{"event":"info","version":2}`)
 	nonce.Next("1514401173001")
 	ev, err := listener.nextInfoEvent()
@@ -41,6 +41,7 @@ func TestTicker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// subscribe ack
 	async.Publish(`{"event":"subscribed","channel":"ticker","chanId":5,"symbol":"tBTCUSD","subId":"1514401173001","pair":"BTCUSD"}`)
 	sub, err := listener.nextSubscriptionEvent()
 	if err != nil {
@@ -54,6 +55,7 @@ func TestTicker(t *testing.T) {
 		Pair:    "BTCUSD",
 	}, sub)
 
+	// tick data
 	async.Publish(`[5,[14957,68.17328796,14958,55.29588132,-659,-0.0422,14971,53723.08813995,16494,14454]]`)
 	tick, err := listener.nextTick()
 	if err != nil {
