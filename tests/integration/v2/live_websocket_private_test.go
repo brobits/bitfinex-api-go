@@ -79,8 +79,8 @@ func TestWebsocketOrder(t *testing.T) {
 	}
 
 	oc := &bitfinex.OrderCancelRequest{
-		CID:     &cid,
-		CIDDate: &cidDate,
+		CID:     cid,
+		CIDDate: cidDate,
 	}
 
 	wg.Add(1)

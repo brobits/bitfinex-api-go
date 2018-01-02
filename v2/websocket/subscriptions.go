@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type subscriptionRequest struct {
+type SubscriptionRequest struct {
 	SubID string `json:"subId"`
 	Event string `json:"event"`
 
@@ -26,7 +26,7 @@ type subscriptionRequest struct {
 	Pair      string `json:"pair,omitempty"`
 }
 
-type unsubscribeRequest struct {
+type UnsubscribeRequest struct {
 	Event  string `json:"event"`
 	ChanID int64  `json:"chanId"`
 }
@@ -37,10 +37,10 @@ type subscription struct {
 	ChanID  int64
 	pending bool
 
-	Request *subscriptionRequest
+	Request *SubscriptionRequest
 }
 
-func newSubscription(request *subscriptionRequest) *subscription {
+func newSubscription(request *SubscriptionRequest) *subscription {
 	return &subscription{
 		Request: request,
 		pending: true,
@@ -69,7 +69,7 @@ type subscriptions struct {
 	subsByChanID map[int64]*subscription  // subscription map indexed by channel ID
 }
 
-func (s *subscriptions) add(sub *subscriptionRequest) *subscription {
+func (s *subscriptions) add(sub *SubscriptionRequest) *subscription {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	subscription := newSubscription(sub)

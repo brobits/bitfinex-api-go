@@ -137,18 +137,18 @@ func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
 // combination of Client ID (CID) and the daten for the given
 // CID.
 type OrderCancelRequest struct {
-	ID      *int64  `json:"id,omitempty"`
-	CID     *int64  `json:"cid,omitempty"`
-	CIDDate *string `json:"cid_date,omitempty"`
+	ID      int64  `json:"id,omitempty"`
+	CID     int64  `json:"cid,omitempty"`
+	CIDDate string `json:"cid_date,omitempty"`
 }
 
 // MarshalJSON converts the order cancel object into the format required by the
 // bitfinex websocket service.
 func (o *OrderCancelRequest) MarshalJSON() ([]byte, error) {
 	aux := struct {
-		ID      *int64  `json:"id,omitempty"`
-		CID     *int64  `json:"cid,omitempty"`
-		CIDDate *string `json:"cid_date,omitempty"`
+		ID      int64  `json:"id,omitempty"`
+		CID     int64  `json:"cid,omitempty"`
+		CIDDate string `json:"cid_date,omitempty"`
 	}{
 		ID:      o.ID,
 		CID:     o.CID,
@@ -359,7 +359,7 @@ func NewPositionSnapshotFromRaw(raw []interface{}) (ps PositionSnapshot, err err
 // Trade represents a trade on the public data feed.
 type Trade struct {
 	ID     int64
-	MTS    uint64
+	MTS    int64
 	Amount float64
 	Price  float64
 }
@@ -371,7 +371,7 @@ func NewTradeFromRaw(raw []interface{}) (o Trade, err error) {
 
 	o = Trade{
 		ID:     i64ValOrZero(raw[0]),
-		MTS:    ui64ValOrZero(raw[1]),
+		MTS:    i64ValOrZero(raw[1]),
 		Amount: f64ValOrZero(raw[2]),
 		Price:  f64ValOrZero(raw[3]),
 	}
@@ -379,7 +379,45 @@ func NewTradeFromRaw(raw []interface{}) (o Trade, err error) {
 	return
 }
 
-type TradeUpdate Trade
+type TradeUpdate struct {
+	ID          int64
+	Pair        string
+	MTS         int64
+	OrderID     int64
+	ExecAmount  float64
+	ExecPrice   float64
+	OrderType   string
+	OrderPrice  float64
+	Maker       int
+	Fee         float64
+	FeeCurrency string
+}
+
+// public trade update just looks like a trade
+func NewTradeUpdateFromRaw(raw []interface{}) (o TradeUpdate, err error) {
+	if len(raw) == 4 {
+		o = TradeUpdate{ID: i64ValOrZero(raw[0]), MTS: i64ValOrZero(raw[1]), ExecAmount: f64ValOrZero(raw[2]), ExecPrice: f64ValOrZero(raw[3])}
+		return
+	}
+	if len(raw) == 11 {
+		o = TradeUpdate{
+			ID:          i64ValOrZero(raw[0]),
+			Pair:        sValOrEmpty(raw[1]),
+			MTS:         i64ValOrZero(raw[2]),
+			OrderID:     i64ValOrZero(raw[3]),
+			ExecAmount:  f64ValOrZero(raw[4]),
+			ExecPrice:   f64ValOrZero(raw[5]),
+			OrderType:   sValOrEmpty(raw[6]),
+			OrderPrice:  f64ValOrZero(raw[7]),
+			Maker:       iValOrZero(raw[8]),
+			Fee:         f64ValOrZero(raw[9]),
+			FeeCurrency: sValOrEmpty(raw[10]),
+		}
+		return
+	}
+	return o, fmt.Errorf("data slice too short for trade update: %#v", raw)
+}
+
 type TradeSnapshot []Trade
 type HistoricalTradeSnapshot TradeSnapshot
 
@@ -387,7 +425,6 @@ func NewTradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 	if len(raw) == 0 {
 		return
 	}
-
 	switch raw[0].(type) {
 	case []interface{}:
 		for _, v := range raw {
@@ -400,7 +437,7 @@ func NewTradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 			}
 		}
 	default:
-		return ts, fmt.Errorf("not a trade snapshot")
+		return ts, fmt.Errorf("not a trade snapshot: %#v", raw)
 	}
 
 	return
@@ -408,10 +445,12 @@ func NewTradeSnapshotFromRaw(raw []interface{}) (ts TradeSnapshot, err error) {
 
 // TradeExecution represents a trade on the public data feed.
 type TradeExecution struct {
-	ID     int64
-	MTS    uint64
-	Amount float64
-	Price  float64
+	ID      int64
+	Pair    string
+	MTS     int64
+	OrderID int64
+	Amount  float64
+	Price   float64
 }
 
 func NewTradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
@@ -419,13 +458,14 @@ func NewTradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
 		return o, fmt.Errorf("data slice too short for trade execution: %#v", raw)
 	}
 
-	log.Printf("TradeExecution: %#v", raw)
-
+	log.Printf("%#v", raw)
 	o = TradeExecution{
-		ID:     i64ValOrZero(raw[0]),
-		MTS:    ui64ValOrZero(raw[1]),
-		Amount: f64ValOrZero(raw[2]),
-		Price:  f64ValOrZero(raw[3]),
+		ID:      i64ValOrZero(raw[0]),
+		Pair:    sValOrEmpty(raw[1]),
+		MTS:     i64ValOrZero(raw[2]),
+		OrderID: i64ValOrZero(raw[3]),
+		Amount:  f64ValOrZero(raw[4]),
+		Price:   f64ValOrZero(raw[5]),
 	}
 
 	return
@@ -436,7 +476,7 @@ type Wallet struct {
 	Currency          string
 	Balance           float64
 	UnsettledInterest float64
-	BalanceAvailable  *float64
+	BalanceAvailable  float64
 }
 
 func NewWalletFromRaw(raw []interface{}) (o Wallet, err error) {
@@ -449,7 +489,7 @@ func NewWalletFromRaw(raw []interface{}) (o Wallet, err error) {
 		Currency:          sValOrEmpty(raw[1]),
 		Balance:           f64ValOrZero(raw[2]),
 		UnsettledInterest: f64ValOrZero(raw[3]),
-		BalanceAvailable:  f64pValOrNil(raw[4]),
+		BalanceAvailable:  f64ValOrZero(raw[4]),
 	}
 
 	return
@@ -482,22 +522,22 @@ func NewWalletSnapshotFromRaw(raw []interface{}) (ws WalletSnapshot, err error) 
 }
 
 type BalanceInfo struct {
-	TotalAUM   float64
-	NetAUM     float64
-	WalletType string
-	Currency   string
+	TotalAUM float64
+	NetAUM   float64
+	/*WalletType string
+	Currency   string*/
 }
 
 func NewBalanceInfoFromRaw(raw []interface{}) (o BalanceInfo, err error) {
-	if len(raw) < 4 {
+	if len(raw) < 2 {
 		return o, fmt.Errorf("data slice too short for balance info: %#v", raw)
 	}
 
 	o = BalanceInfo{
-		TotalAUM:   f64ValOrZero(raw[0]),
-		NetAUM:     f64ValOrZero(raw[1]),
-		WalletType: sValOrEmpty(raw[2]),
-		Currency:   sValOrEmpty(raw[3]),
+		TotalAUM: f64ValOrZero(raw[0]),
+		NetAUM:   f64ValOrZero(raw[1]),
+		/*WalletType: sValOrEmpty(raw[2]),
+		Currency:   sValOrEmpty(raw[3]),*/
 	}
 
 	return
@@ -947,7 +987,7 @@ type Notification struct {
 	Type       string
 	MessageID  int64
 	NotifyInfo interface{}
-	Code       *int64
+	Code       int64
 	Status     string
 	Text       string
 }
@@ -962,7 +1002,7 @@ func NewNotificationFromRaw(raw []interface{}) (o Notification, err error) {
 		Type:      sValOrEmpty(raw[1]),
 		MessageID: i64ValOrZero(raw[2]),
 		//NotifyInfo: raw[4],
-		Code:   i64pValOrNil(raw[5]),
+		Code:   i64ValOrZero(raw[5]),
 		Status: sValOrEmpty(raw[6]),
 		Text:   sValOrEmpty(raw[7]),
 	}

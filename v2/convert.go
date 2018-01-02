@@ -18,8 +18,15 @@ func F64Slice(in []interface{}) ([]float64, error) {
 }
 
 func i64ValOrZero(i interface{}) int64 {
-	if r, ok := i.(int64); ok {
-		return r
+	if r, ok := i.(float64); ok {
+		return int64(r)
+	}
+	return 0
+}
+
+func iValOrZero(i interface{}) int {
+	if r, ok := i.(float64); ok {
+		return int(r)
 	}
 	return 0
 }
@@ -36,8 +43,8 @@ func i64pValOrNil(i interface{}) *int64 {
 }
 
 func ui64ValOrZero(i interface{}) uint64 {
-	if r, ok := i.(uint64); ok {
-		return r
+	if r, ok := i.(float64); ok {
+		return uint64(r)
 	}
 	return 0
 }

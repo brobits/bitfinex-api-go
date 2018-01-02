@@ -6,6 +6,12 @@ import (
 )
 
 func isZeroOfUnderlyingType(x interface{}) bool {
+	if x == nil {
+		return true
+	}
+	if _, ok := x.([]string); ok {
+		return true
+	}
 	return x == reflect.Zero(reflect.TypeOf(x)).Interface()
 }
 
@@ -58,4 +64,5 @@ func assert(t *testing.T, expected interface{}, actual interface{}) {
 			t.Fail()
 		}
 	}
+	t.Logf("OK %s", exp.Type().Name())
 }

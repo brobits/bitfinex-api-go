@@ -11,7 +11,7 @@ import (
 
 // SubscribeTicker sends a subscription request for the ticker.
 func (c *Client) SubscribeTicker(ctx context.Context, symbol string) (string, error) {
-	req := &subscriptionRequest{
+	req := &SubscriptionRequest{
 		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanTicker,
@@ -28,7 +28,7 @@ func (c *Client) SubscribeTicker(ctx context.Context, symbol string) (string, er
 
 // SubscribeTrades sends a subscription request for the trade feed.
 func (c *Client) SubscribeTrades(ctx context.Context, symbol string) (string, error) {
-	req := &subscriptionRequest{
+	req := &SubscriptionRequest{
 		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanTrades,
@@ -45,7 +45,7 @@ func (c *Client) SubscribeTrades(ctx context.Context, symbol string) (string, er
 
 // SubscribeBook sends a subscription request for market data.
 func (c *Client) SubscribeBook(ctx context.Context, symbol string) (string, error) {
-	req := &subscriptionRequest{
+	req := &SubscriptionRequest{
 		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanBook,
@@ -62,7 +62,7 @@ func (c *Client) SubscribeBook(ctx context.Context, symbol string) (string, erro
 
 // SubscribeCandles sends a subscription request for OHLC candles.
 func (c *Client) SubscribeCandles(ctx context.Context, symbol string, resolution bitfinex.CandleResolution) (string, error) {
-	req := &subscriptionRequest{
+	req := &SubscriptionRequest{
 		SubID:   c.nonce.GetNonce(),
 		Event:   EventSubscribe,
 		Channel: ChanCandles,

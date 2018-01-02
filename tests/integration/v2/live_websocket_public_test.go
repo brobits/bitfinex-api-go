@@ -86,7 +86,7 @@ func TestPublicTicker(t *testing.T) {
 func TestPublicTrades(t *testing.T) {
 	c := websocket.NewClient()
 	wg := sync.WaitGroup{}
-	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. data message
+	wg.Add(3) // 1. Info with version, 2. Subscription event, 3. 3 x data message
 
 	err := c.Connect()
 	if err != nil {

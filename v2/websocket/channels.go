@@ -66,20 +66,32 @@ func (c *Client) handleChannel(msg []byte) error {
 		// public data is returned as raw interface arrays, use a factory to convert to raw type & publish
 		if factory, ok := c.factories[sub.Request.Channel]; ok {
 			flt := obj.([][]float64)
-			if len(flt) >= 1 {
-				arr := make([]interface{}, len(flt[0]))
+			var arr []interface{}
+			if len(flt) == 1 {
+				// deep copy types
+				arr = make([]interface{}, len(flt[0]))
 				for i, ft := range flt[0] {
 					arr[i] = ft
 				}
-				msg, err := factory(chanID, arr)
-				if err != nil {
-					// factory error
-					return err
+			} else if len(flt) > 1 {
+				// deep copy types
+				arr = make([]interface{}, len(flt))
+				for i, fta := range flt {
+					sub := make([]interface{}, len(fta))
+					for j, ft := range fta {
+						sub[j] = ft
+					}
+					arr[i] = sub
 				}
-				c.listener <- msg
 			} else {
-				log.Printf("data too small to process: %#v", obj)
+				return fmt.Errorf("data too small to process: %#v", obj)
 			}
+			msg, err := factory(chanID, arr)
+			if err != nil {
+				// factory error
+				return err
+			}
+			c.listener <- msg
 		} else {
 			// factory lookup error
 			log.Printf("could not find public factory for %s channel", sub.Request.Channel)
@@ -258,11 +270,10 @@ func (c *Client) convertRaw(term string, raw []interface{}) interface{} {
 		}
 		return &o
 	case "tu":
-		o, err := bitfinex.NewTradeFromRaw(raw)
+		tu, err := bitfinex.NewTradeUpdateFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		tu := bitfinex.TradeUpdate(o)
 		return &tu
 	case "fte":
 		o, err := bitfinex.NewFundingTradeFromRaw(raw)
@@ -397,7 +408,17 @@ func (c *Client) convertRaw(term string, raw []interface{}) interface{} {
 		if err != nil {
 			return err
 		}
-		return &o
+		// return a strongly typed reference, rather than dereference a generic interface
+		// too bad golang doesn't inherit an interface's underlying type when creating a reference to the interface
+		if _, ok := o.(bitfinex.MarginInfoBase); ok {
+			base := o.(bitfinex.MarginInfoBase)
+			return &base
+		}
+		if _, ok := o.(bitfinex.MarginInfoUpdate); ok {
+			update := o.(bitfinex.MarginInfoUpdate)
+			return &update
+		}
+		return nil
 	default:
 	}
 

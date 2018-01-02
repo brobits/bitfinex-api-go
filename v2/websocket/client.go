@@ -121,7 +121,7 @@ func NewClientWithAsyncNonce(async Asynchronous, nonce utils.NonceGenerator) *Cl
 		subscriptions:  newSubscriptions(),
 		nonce:          nonce,
 	}
-	c.registerFactories()
+	c.registerPublicFactories()
 	// wait for shutdown signals from child & caller
 	go c.listenDisconnect()
 	return c
@@ -142,7 +142,7 @@ func extractSymbolResolutionFromKey(subscription string) (symbol string, resolut
 	return sym, resolution, nil
 }
 
-func (c *Client) registerFactories() {
+func (c *Client) registerPublicFactories() {
 	c.registerFactory(ChanTicker, func(chanID int64, raw []interface{}) (msg interface{}, err error) {
 		sub, err := c.subscriptions.lookupByChannelID(chanID)
 		if err == nil {
@@ -268,7 +268,6 @@ func (c *Client) unsubscribeByChanID(ctx context.Context, id int64) error {
 
 func (c *Client) handleOpen() {
 	if c.hasCredentials() {
-		log.Print("sending authentication request")
 		c.authenticate(context.Background())
 	}
 }
@@ -293,7 +292,7 @@ func (c *Client) authenticate(ctx context.Context, filter ...string) error {
 	nonce := c.nonce.GetNonce()
 
 	payload := "AUTH" + nonce
-	s := &subscriptionRequest{
+	s := &SubscriptionRequest{
 		Event:       "auth",
 		APIKey:      c.apiKey,
 		AuthSig:     c.sign(payload),

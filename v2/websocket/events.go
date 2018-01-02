@@ -92,7 +92,10 @@ func (c *Client) handleEvent(msg []byte) error {
 		if err != nil {
 			return err
 		}
-		c.subscriptions.activate(a.SubID, a.ChanID)
+		err = c.subscriptions.activate(a.SubID, a.ChanID)
+		if err != nil {
+			return err
+		}
 		if a.Status != "" && a.Status == "OK" {
 			c.Authentication = SuccessfulAuthentication
 		} else {
@@ -106,7 +109,7 @@ func (c *Client) handleEvent(msg []byte) error {
 		if err != nil {
 			return err
 		}
-		err := c.subscriptions.activate(s.SubID, s.ChanID)
+		err = c.subscriptions.activate(s.SubID, s.ChanID)
 		if err != nil {
 			return err
 		}
