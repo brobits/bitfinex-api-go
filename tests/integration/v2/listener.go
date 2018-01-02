@@ -2,6 +2,7 @@ package tests
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
@@ -10,6 +11,7 @@ import (
 
 type listener struct {
 	infoEvents           chan *websocket.InfoEvent
+	authEvents           chan *websocket.AuthEvent
 	ticks                chan *bitfinex.Ticker
 	subscriptionEvents   chan *websocket.SubscribeEvent
 	unsubscriptionEvents chan *websocket.UnsubscribeEvent
@@ -18,11 +20,12 @@ type listener struct {
 
 func newListener() *listener {
 	return &listener{
-		infoEvents:           make(chan *websocket.InfoEvent),
-		ticks:                make(chan *bitfinex.Ticker),
-		subscriptionEvents:   make(chan *websocket.SubscribeEvent),
-		unsubscriptionEvents: make(chan *websocket.UnsubscribeEvent),
-		errors:               make(chan error),
+		infoEvents:           make(chan *websocket.InfoEvent, 10),
+		authEvents:           make(chan *websocket.AuthEvent, 10),
+		ticks:                make(chan *bitfinex.Ticker, 10),
+		subscriptionEvents:   make(chan *websocket.SubscribeEvent, 10),
+		unsubscriptionEvents: make(chan *websocket.UnsubscribeEvent, 10),
+		errors:               make(chan error, 10),
 	}
 }
 
@@ -37,6 +40,20 @@ func (l *listener) nextInfoEvent() (*websocket.InfoEvent, error) {
 		return ev, nil
 	case <-timeout:
 		return nil, errors.New("timed out waiting for InfoEvent")
+	}
+}
+
+func (l *listener) nextAuthEvent() (*websocket.AuthEvent, error) {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(time.Second * 2)
+		close(timeout)
+	}()
+	select {
+	case ev := <-l.authEvents:
+		return ev, nil
+	case <-timeout:
+		return nil, errors.New("timed out waiting for AuthEvent")
 	}
 }
 
@@ -92,7 +109,7 @@ func (l *listener) run(ch <-chan interface{}) {
 					return
 				}
 				// remove threading guarantees when mulitplexing into channels
-				//log.Printf("%#v", msg)
+				log.Printf("%#v", msg)
 				switch msg.(type) {
 				case error:
 					l.errors <- msg.(error)
@@ -104,6 +121,8 @@ func (l *listener) run(ch <-chan interface{}) {
 					l.subscriptionEvents <- msg.(*websocket.SubscribeEvent)
 				case *websocket.UnsubscribeEvent:
 					l.unsubscriptionEvents <- msg.(*websocket.UnsubscribeEvent)
+				case *websocket.AuthEvent:
+					l.authEvents <- msg.(*websocket.AuthEvent)
 				}
 			}
 		}

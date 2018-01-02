@@ -52,6 +52,7 @@ func (w *ws) Connect() error {
 
 	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: w.TLSSkipVerify}
 
+	log.Printf("connecting ws to %s", w.BaseURL)
 	ws, _, err := d.Dial(w.BaseURL, nil)
 	if err != nil {
 		return err
@@ -119,7 +120,7 @@ func (w *ws) listenWs() {
 			w.cleanup(err)
 			return
 		}
-		log.Print(msg)
+		log.Print(string(msg))
 		w.downstream <- msg
 	}
 }

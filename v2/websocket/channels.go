@@ -48,7 +48,9 @@ func (c *Client) handleChannel(msg []byte) error {
 						return err
 					}
 					// private data is returned as strongly typed data, publish directly
-					c.listener <- &obj
+					if obj != nil {
+						c.listener <- obj
+					}
 				}
 			}
 		}
@@ -133,8 +135,13 @@ func (c *Client) processDataSlice(data []interface{}) (interface{}, error) {
 // hb (both): [ChanID, "hb"]
 // private msg: [ChanID, "type", [Data]]
 func (c *Client) handlePrivateDataMessage(term string, data []interface{}) (ms interface{}, err error) {
+	if len(data) == 0 {
+		// empty data msg
+		return nil, nil
+	}
+
 	if len(data) < 2 {
-		return ms, fmt.Errorf("data message too short: %#v", data)
+		return nil, fmt.Errorf("%s data message too short: %#v", term, data)
 	}
 	/*
 		term, ok := data[1].(string)
@@ -145,7 +152,7 @@ func (c *Client) handlePrivateDataMessage(term string, data []interface{}) (ms i
 	*/
 	if len(data) == 1 || term == "hb" { // Heartbeat
 		// TODO: Consider adding a switch to enable/disable passing these along.
-		return bitfinex.Heartbeat{}, nil
+		return &bitfinex.Heartbeat{}, nil
 	}
 	/*
 		list, ok := data[2].([]interface{})
@@ -168,190 +175,212 @@ func (c *Client) convertRaw(term string, raw []interface{}) interface{} {
 		if err != nil {
 			return err
 		}
-		return bitfinex.BalanceUpdate(o)
+		bu := bitfinex.BalanceUpdate(o)
+		return &bu
 	case "ps":
 		o, err := bitfinex.NewPositionSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "pn":
 		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.PositionNew(o)
+		pn := bitfinex.PositionNew(o)
+		return &pn
 	case "pu":
 		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.PositionUpdate(o)
+		pu := bitfinex.PositionUpdate(o)
+		return &pu
 	case "pc":
 		o, err := bitfinex.NewPositionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.PositionCancel(o)
+		pc := bitfinex.PositionCancel(o)
+		return &pc
 	case "ws":
 		o, err := bitfinex.NewWalletSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "wu":
 		o, err := bitfinex.NewWalletFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.WalletUpdate(o)
+		wu := bitfinex.WalletUpdate(o)
+		return &wu
 	case "os":
 		o, err := bitfinex.NewOrderSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "on":
 		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.OrderNew(o)
+		on := bitfinex.OrderNew(o)
+		return &on
 	case "ou":
 		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.OrderUpdate(o)
+		ou := bitfinex.OrderUpdate(o)
+		return &ou
 	case "oc":
 		o, err := bitfinex.NewOrderFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.OrderCancel(o)
+		oc := bitfinex.OrderCancel(o)
+		return &oc
 	case "hts":
 		o, err := bitfinex.NewTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.HistoricalTradeSnapshot(o)
+		hts := bitfinex.HistoricalTradeSnapshot(o)
+		return &hts
 	case "te":
 		o, err := bitfinex.NewTradeExecutionFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "tu":
 		o, err := bitfinex.NewTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.TradeUpdate(o)
+		tu := bitfinex.TradeUpdate(o)
+		return &tu
 	case "fte":
 		o, err := bitfinex.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingTradeExecution(o)
+		fte := bitfinex.FundingTradeExecution(o)
+		return &fte
 	case "ftu":
 		o, err := bitfinex.NewFundingTradeFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingTradeUpdate(o)
+		ftu := bitfinex.FundingTradeUpdate(o)
+		return &ftu
 	case "hfts":
 		o, err := bitfinex.NewFundingTradeSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.HistoricalFundingTradeSnapshot(o)
+		nfts := bitfinex.HistoricalFundingTradeSnapshot(o)
+		return &nfts
 	case "n":
 		o, err := bitfinex.NewNotificationFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "fos":
 		o, err := bitfinex.NewFundingOfferSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "fon":
 		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingOfferNew(o)
+		fon := bitfinex.FundingOfferNew(o)
+		return &fon
 	case "fou":
 		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingOfferUpdate(o)
+		fou := bitfinex.FundingOfferUpdate(o)
+		return &fou
 	case "foc":
 		o, err := bitfinex.NewOfferFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingOfferCancel(o)
+		foc := bitfinex.FundingOfferCancel(o)
+		return &foc
 	case "fiu":
 		o, err := bitfinex.NewFundingInfoFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "fcs":
 		o, err := bitfinex.NewFundingCreditSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "fcn":
 		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingCreditNew(o)
+		fcn := bitfinex.FundingCreditNew(o)
+		return &fcn
 	case "fcu":
 		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingCreditUpdate(o)
+		fcu := bitfinex.FundingCreditUpdate(o)
+		return &fcu
 	case "fcc":
 		o, err := bitfinex.NewCreditFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingCreditCancel(o)
+		fcc := bitfinex.FundingCreditCancel(o)
+		return &fcc
 	case "fls":
 		o, err := bitfinex.NewFundingLoanSnapshotFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	case "fln":
 		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingLoanNew(o)
+		fln := bitfinex.FundingLoanNew(o)
+		return &fln
 	case "flu":
 		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingLoanUpdate(o)
+		flu := bitfinex.FundingLoanUpdate(o)
+		return &flu
 	case "flc":
 		o, err := bitfinex.NewLoanFromRaw(raw)
 		if err != nil {
 			return err
 		}
-		return bitfinex.FundingLoanCancel(o)
+		flc := bitfinex.FundingLoanCancel(o)
+		return &flc
 		//case "uac":
 	case "hb":
-		return bitfinex.Heartbeat{}
+		return &bitfinex.Heartbeat{}
 	case "ats":
 		// TODO: Is not in documentation, so figure out what it is.
 		return nil
@@ -368,7 +397,7 @@ func (c *Client) convertRaw(term string, raw []interface{}) interface{} {
 		if err != nil {
 			return err
 		}
-		return o
+		return &o
 	default:
 	}
 

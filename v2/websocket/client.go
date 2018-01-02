@@ -263,13 +263,18 @@ func (c *Client) sendUnsubscribeMessage(ctx context.Context, id int64) error {
 }
 
 func (c *Client) unsubscribeByChanID(ctx context.Context, id int64) error {
-	/*
-		err := c.subscriptions.removeByChanID(id)
-		if err != nil {
-			return err
-		}
-	*/
 	return c.sendUnsubscribeMessage(ctx, id)
+}
+
+func (c *Client) handleOpen() {
+	if c.hasCredentials() {
+		log.Print("sending authentication request")
+		c.authenticate(context.Background())
+	}
+}
+
+func (c *Client) hasCredentials() bool {
+	return c.apiKey != "" && c.apiSecret != ""
 }
 
 // Unsubscribe looks up an existing subscription by ID and sends an unsubscribe request.
@@ -284,7 +289,7 @@ func (c *Client) Unsubscribe(ctx context.Context, id string) error {
 // Authenticate creates the payload for the authentication request and sends it
 // to the API. The filters will be applied to the authenticated channel, i.e.
 // only subscribe to the filtered messages.
-func (c *Client) Authenticate(ctx context.Context, filter ...string) error {
+func (c *Client) authenticate(ctx context.Context, filter ...string) error {
 	nonce := c.nonce.GetNonce()
 
 	payload := "AUTH" + nonce

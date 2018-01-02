@@ -76,7 +76,6 @@ func (c *Client) handleEvent(msg []byte) error {
 	if err != nil {
 		return err
 	}
-
 	//var e interface{}
 	switch event.Event {
 	case "info":
@@ -85,6 +84,7 @@ func (c *Client) handleEvent(msg []byte) error {
 		if err != nil {
 			return err
 		}
+		c.handleOpen()
 		c.listener <- &i
 	case "auth":
 		a := AuthEvent{}
@@ -93,7 +93,11 @@ func (c *Client) handleEvent(msg []byte) error {
 			return err
 		}
 		c.subscriptions.activate(a.SubID, a.ChanID)
-		c.Authentication = SuccessfulAuthentication
+		if a.Status != "" && a.Status == "OK" {
+			c.Authentication = SuccessfulAuthentication
+		} else {
+			c.Authentication = RejectedAuthentication
+		}
 		c.listener <- &a
 		return nil
 	case "subscribed":
@@ -118,11 +122,17 @@ func (c *Client) handleEvent(msg []byte) error {
 		c.listener <- &s
 	case "error":
 		er := ErrorEvent{}
-		// TODO e->er
+		err = json.Unmarshal(msg, &er)
+		if err != nil {
+			return err
+		}
 		c.listener <- &er
 	case "conf":
 		ec := ConfEvent{}
-		// TODO e->ec
+		err = json.Unmarshal(msg, &ec)
+		if err != nil {
+			return err
+		}
 		c.listener <- &ec
 	default:
 		return fmt.Errorf("unknown event: %s", msg) // TODO: or just log?

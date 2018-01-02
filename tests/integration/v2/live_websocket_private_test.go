@@ -47,15 +47,15 @@ func TestWebsocketOrder(t *testing.T) {
 			}
 		}
 	}()
-
-	err = c.Authenticate(context.Background())
-	if err != nil {
-		t.Fatalf("authenticating with websocket service: %s", err)
-	}
-	if err := wait(&wg, errch, 2*time.Second); err != nil {
-		t.Fatalf("failed to authenticate with websocket service: %s", err)
-	}
-
+	/*
+		err = c.Authenticate(context.Background())
+		if err != nil {
+			t.Fatalf("authenticating with websocket service: %s", err)
+		}
+		if err := wait(&wg, errch, 2*time.Second); err != nil {
+			t.Fatalf("failed to authenticate with websocket service: %s", err)
+		}
+	*/
 	wg.Add(1)
 	n := time.Now()
 	cid := n.Unix()

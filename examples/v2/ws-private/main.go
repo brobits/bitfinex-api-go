@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"time"
@@ -35,8 +34,8 @@ func main() {
 		}
 	}()
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-	c.Authenticate(ctx)
+	//ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
+	//c.Authenticate(ctx)
 
 	time.Sleep(time.Second * 10)
 }

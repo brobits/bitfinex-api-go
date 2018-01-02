@@ -96,7 +96,7 @@ func (s *subscriptions) removeBySubID(subID string) error {
 	defer s.lock.Unlock()
 	sub, ok := s.subsBySubID[subID]
 	if !ok {
-		return fmt.Errorf("could not find subscription ID %s", subID)
+		return fmt.Errorf("could not find subscription ID %s to remove", subID)
 	}
 	// exists, remove both indices
 	delete(s.subsBySubID, subID)
@@ -115,7 +115,7 @@ func (s *subscriptions) activate(subID string, chanID int64) error {
 		s.subsByChanID[chanID] = sub
 		return nil
 	}
-	return fmt.Errorf("could not find subscription ID %s", subID)
+	return fmt.Errorf("could not find subscription ID %s to activate", subID)
 }
 
 func (s *subscriptions) lookupByChannelID(chanID int64) (*subscription, error) {
