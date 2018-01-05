@@ -17,6 +17,8 @@ type listener struct {
 	unsubscriptionEvents chan *websocket.UnsubscribeEvent
 	walletUpdates        chan *bitfinex.WalletUpdate
 	balanceUpdates       chan *bitfinex.BalanceUpdate
+	walletSnapshot       chan *bitfinex.WalletSnapshot
+	positionSnapshot     chan *bitfinex.PositionSnapshot
 	notifications        chan *bitfinex.Notification
 	positions            chan *bitfinex.PositionUpdate
 	tradeUpdates         chan *bitfinex.TradeUpdate
@@ -25,6 +27,7 @@ type listener struct {
 	marginBase           chan *bitfinex.MarginInfoBase
 	marginUpdate         chan *bitfinex.MarginInfoUpdate
 	funding              chan *bitfinex.FundingInfo
+	orderNew             chan *bitfinex.OrderNew
 	errors               chan error
 }
 
@@ -37,6 +40,8 @@ func newListener() *listener {
 		unsubscriptionEvents: make(chan *websocket.UnsubscribeEvent, 10),
 		walletUpdates:        make(chan *bitfinex.WalletUpdate, 10),
 		balanceUpdates:       make(chan *bitfinex.BalanceUpdate, 10),
+		walletSnapshot:       make(chan *bitfinex.WalletSnapshot, 10),
+		positionSnapshot:     make(chan *bitfinex.PositionSnapshot, 10),
 		errors:               make(chan error, 10),
 		notifications:        make(chan *bitfinex.Notification, 10),
 		positions:            make(chan *bitfinex.PositionUpdate, 10),
@@ -45,6 +50,7 @@ func newListener() *listener {
 		cancels:              make(chan *bitfinex.OrderCancel, 10),
 		marginBase:           make(chan *bitfinex.MarginInfoBase, 10),
 		marginUpdate:         make(chan *bitfinex.MarginInfoUpdate, 10),
+		orderNew:             make(chan *bitfinex.OrderNew, 10),
 		funding:              make(chan *bitfinex.FundingInfo, 10),
 	}
 }
@@ -102,6 +108,34 @@ func (l *listener) nextBalanceUpdate() (*bitfinex.BalanceUpdate, error) {
 		return ev, nil
 	case <-timeout:
 		return nil, errors.New("timed out waiting for BalanceUpdate")
+	}
+}
+
+func (l *listener) nextWalletSnapshot() (*bitfinex.WalletSnapshot, error) {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(time.Second * 2)
+		close(timeout)
+	}()
+	select {
+	case ev := <-l.walletSnapshot:
+		return ev, nil
+	case <-timeout:
+		return nil, errors.New("timed out waiting for WalletSnapshot")
+	}
+}
+
+func (l *listener) nextPositionSnapshot() (*bitfinex.PositionSnapshot, error) {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(time.Second * 2)
+		close(timeout)
+	}()
+	select {
+	case ev := <-l.positionSnapshot:
+		return ev, nil
+	case <-timeout:
+		return nil, errors.New("timed out waiting for PositionSnapshot")
 	}
 }
 
@@ -259,6 +293,20 @@ func (l *listener) nextFundingInfo() (*bitfinex.FundingInfo, error) {
 	}
 }
 
+func (l *listener) nextOrderNew() (*bitfinex.OrderNew, error) {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(time.Second * 2)
+		close(timeout)
+	}()
+	select {
+	case ev := <-l.orderNew:
+		return ev, nil
+	case <-timeout:
+		return nil, errors.New("timed out waiting for OrderNew")
+	}
+}
+
 // strongly types messages and places them into a channel
 func (l *listener) run(ch <-chan interface{}) {
 	go func() {
@@ -301,8 +349,14 @@ func (l *listener) run(ch <-chan interface{}) {
 					l.marginBase <- msg.(*bitfinex.MarginInfoBase)
 				case *bitfinex.MarginInfoUpdate:
 					l.marginUpdate <- msg.(*bitfinex.MarginInfoUpdate)
+				case *bitfinex.OrderNew:
+					l.orderNew <- msg.(*bitfinex.OrderNew)
 				case *bitfinex.FundingInfo:
 					l.funding <- msg.(*bitfinex.FundingInfo)
+				case *bitfinex.PositionSnapshot:
+					l.positionSnapshot <- msg.(*bitfinex.PositionSnapshot)
+				case *bitfinex.WalletSnapshot:
+					l.walletSnapshot <- msg.(*bitfinex.WalletSnapshot)
 				}
 			}
 		}

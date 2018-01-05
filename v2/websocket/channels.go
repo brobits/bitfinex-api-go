@@ -145,24 +145,15 @@ func (c *Client) processDataSlice(data []interface{}) (interface{}, error) {
 
 // public msg: [ChanID, [Data]]
 // hb (both): [ChanID, "hb"]
-// private msg: [ChanID, "type", [Data]]
+// private update msg: [ChanID, "type", [Data]]
+// private snapshot msg: [ChanID, "type", [[Data]]]
 func (c *Client) handlePrivateDataMessage(term string, data []interface{}) (ms interface{}, err error) {
 	if len(data) == 0 {
 		// empty data msg
 		return nil, nil
 	}
 
-	if len(data) < 2 {
-		return nil, fmt.Errorf("%s data message too short: %#v", term, data)
-	}
-	/*
-		term, ok := data[1].(string)
-		// TODO trades violating the following check
-		if !ok {
-			return ms, fmt.Errorf("expected data term string in second position but got %#v in %#v", data[1], data)
-		}
-	*/
-	if len(data) == 1 || term == "hb" { // Heartbeat
+	if term == "hb" { // Heartbeat
 		// TODO: Consider adding a switch to enable/disable passing these along.
 		return &bitfinex.Heartbeat{}, nil
 	}

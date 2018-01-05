@@ -454,7 +454,11 @@ type TradeExecution struct {
 }
 
 func NewTradeExecutionFromRaw(raw []interface{}) (o TradeExecution, err error) {
-	if len(raw) < 4 {
+	if len(raw) == 4 {
+		o = TradeExecution{ID: i64ValOrZero(raw[0]), MTS: i64ValOrZero(raw[1]), Amount: f64ValOrZero(raw[2]), Price: f64ValOrZero(raw[3])}
+		return
+	}
+	if len(raw) < 6 {
 		return o, fmt.Errorf("data slice too short for trade execution: %#v", raw)
 	}
 

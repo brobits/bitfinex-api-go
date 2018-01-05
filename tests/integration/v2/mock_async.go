@@ -16,10 +16,16 @@ type TestAsync struct {
 	mutex     sync.Mutex
 }
 
-// waits for 4 seconds
+func (t *TestAsync) SentCount() int {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return len(t.Sent)
+}
+
 func (t *TestAsync) waitForMessage(num int) error {
+	seconds := 4
 	loops := 20
-	delay := time.Second * time.Duration(5.0/float64(loops))
+	delay := time.Duration(float64(time.Second) * float64(seconds) / float64(loops))
 	for i := 0; i < loops; i++ {
 		t.mutex.Lock()
 		len := len(t.Sent)
@@ -29,7 +35,7 @@ func (t *TestAsync) waitForMessage(num int) error {
 		}
 		time.Sleep(delay)
 	}
-	return fmt.Errorf("did not sent a message in pos %d", num)
+	return fmt.Errorf("did not send a message in pos %d", num)
 }
 
 func (t *TestAsync) Connect() error {
