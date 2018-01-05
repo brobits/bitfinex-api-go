@@ -3,13 +3,33 @@ package tests
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"sync"
+	"time"
 )
 
 type TestAsync struct {
 	bridge    chan []byte
 	connected bool
 	Sent      []interface{}
+	mutex     sync.Mutex
+}
+
+// waits for 4 seconds
+func (t *TestAsync) waitForMessage(num int) error {
+	loops := 20
+	delay := time.Second * time.Duration(5.0/float64(loops))
+	for i := 0; i < loops; i++ {
+		t.mutex.Lock()
+		len := len(t.Sent)
+		t.mutex.Unlock()
+		if num+1 <= len {
+			return nil
+		}
+		time.Sleep(delay)
+	}
+	return fmt.Errorf("did not sent a message in pos %d", num)
 }
 
 func (t *TestAsync) Connect() error {
@@ -21,6 +41,8 @@ func (t *TestAsync) Send(ctx context.Context, msg interface{}) error {
 	if !t.connected {
 		return errors.New("must connect before sending")
 	}
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	t.Sent = append(t.Sent, msg)
 	return nil
 }
