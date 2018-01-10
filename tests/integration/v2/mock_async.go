@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"log"
 	"sync"
 	"time"
@@ -74,6 +75,18 @@ func (t *TestAsync) Close() {
 func (t *TestAsync) Done() <-chan error {
 	ch := make(chan error)
 	return ch
+}
+
+type TestAsyncFactory struct {
+	AsyncToCreate websocket.Asynchronous
+}
+
+func (t *TestAsyncFactory) Create() websocket.Asynchronous {
+	return t.AsyncToCreate
+}
+
+func newTestAsyncFactory() *TestAsyncFactory {
+	return &TestAsyncFactory{}
 }
 
 func newTestAsync() *TestAsync {

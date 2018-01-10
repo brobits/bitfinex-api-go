@@ -64,14 +64,25 @@ type Asynchronous interface {
 	Done() <-chan error
 }
 
+// AsynchronousFactory creates an Asynchronous interface.  Factories are used to re-create
+// transport interfaces during reconnect scenarios.
+type AsynchronousFactory interface {
+	Create() Asynchronous
+}
+
 // Client provides a unified interface for users to interact with the Bitfinex V2 Websocket API.
 type Client struct {
-	timeout        int64 // read timeout
-	apiKey         string
-	apiSecret      string
-	Authentication AuthState
-	asynchronous   Asynchronous
-	nonce          utils.NonceGenerator
+	timeout           int64 // read timeout
+	apiKey            string
+	apiSecret         string
+	Authentication    AuthState
+	asynchronous      Asynchronous
+	asyncFactory      AsynchronousFactory
+	nonce             utils.NonceGenerator
+	reconnect         bool
+	reconnectInterval time.Duration
+	reconnectAttempts int
+	reconnectCount    int
 
 	// subscription manager
 	subscriptions *subscriptions
@@ -102,29 +113,46 @@ func (c *Client) registerFactory(channel string, factory messageFactory) {
 
 // NewClientWithURL creates a new default client with a given API endpoint.
 func NewClientWithURL(url string) *Client {
-	return NewClientWithAsync(newWs(url))
+	return NewClientWithAsync(newWsFactory(url))
 }
 
 // NewClientWithAsync creates a new default client with a given asynchronous transport interface.
-func NewClientWithAsync(async Asynchronous) *Client {
+func NewClientWithAsync(async AsynchronousFactory) *Client {
 	return NewClientWithAsyncNonce(async, utils.NewEpochNonceGenerator())
 }
 
 // NewClientWithAsync creates a new client with a given asynchronous transport and nonce generator interfaces.
-func NewClientWithAsyncNonce(async Asynchronous, nonce utils.NonceGenerator) *Client {
+func NewClientWithAsyncNonce(async AsynchronousFactory, nonce utils.NonceGenerator) *Client {
 	c := &Client{
-		asynchronous:   async,
-		shutdown:       make(chan bool),
-		Authentication: NoAuthentication,
-		factories:      make(map[string]messageFactory),
-		listener:       make(chan interface{}),
-		subscriptions:  newSubscriptions(),
-		nonce:          nonce,
+		asyncFactory:      async,
+		shutdown:          make(chan bool),
+		factories:         make(map[string]messageFactory),
+		nonce:             nonce,
+		reconnect:         true,
+		reconnectInterval: time.Second * 2,
+		reconnectAttempts: 5,
+		reconnectCount:    0,
 	}
 	c.registerPublicFactories()
+	c.reset()
+	return c
+}
+
+// used in initial setup & reconnect reset
+func (c *Client) reset() {
+	// TODO client must remember subscriptions prior to reset
+	_ = c.subscriptions.getActiveSubscriptions()
+	c.asynchronous = c.asyncFactory.Create()
+	c.Authentication = NoAuthentication
+	c.listener = make(chan interface{})
+	c.subscriptions = newSubscriptions()
 	// wait for shutdown signals from child & caller
 	go c.listenDisconnect()
-	return c
+	// TODO go c.resubscribe(activeSubs)
+}
+
+func (c *Client) resubscribe() {
+
 }
 
 func extractSymbolResolutionFromKey(subscription string) (symbol string, resolution bitfinex.CandleResolution, err error) {
@@ -190,12 +218,36 @@ func (c *Client) Connect() error {
 	return err
 }
 
+// returns false if reconnect attempts have been exceeded
+func (c *Client) tryReconnect() error {
+	c.reconnectCount++
+	log.Printf("attempting reconnect %d/%d", c.reconnectCount, c.reconnectAttempts)
+	c.reset()
+	err := c.Connect()
+	if err != nil {
+		return err
+	}
+	c.reconnectCount = 0
+	return nil
+}
+
 func (c *Client) listenDisconnect() {
 	// block until finished
 	select {
 	case err := <-c.asynchronous.Done(): // child shutdown
-		c.close(err)
-		return
+		for { // attempt reconnects on tryReconnect() failures
+			if c.reconnect && c.reconnectCount < c.reconnectAttempts {
+				err := c.tryReconnect()
+				if err != nil {
+					log.Printf("could not reconnect: %s", err.Error())
+					time.Sleep(c.reconnectInterval)
+					continue // attempt another reconnect?
+				}
+				return // reconnect successful, will spawn this goroutine again
+			}
+			c.close(err)
+			return // do not reconnect
+		}
 	case <-c.shutdown: // normal shutdown
 		return
 	}
@@ -207,12 +259,13 @@ func (c *Client) listenUpstream() {
 		case <-c.shutdown:
 			return
 		case msg := <-c.asynchronous.Listen():
-			if msg != nil {
-				// Errors here should be non critical so we just log them.
-				err := c.handleMessage(msg)
-				if err != nil {
-					log.Printf("[WARN]: %s\n", err)
-				}
+			if msg == nil {
+				return
+			}
+			// Errors here should be non critical so we just log them.
+			err := c.handleMessage(msg)
+			if err != nil {
+				log.Printf("[WARN]: %s\n", err)
 			}
 		}
 	}
@@ -314,4 +367,10 @@ func (c *Client) authenticate(ctx context.Context, filter ...string) error {
 // SetReadTimeout sets the read timeout for the underlying websocket connections.
 func (c *Client) SetReadTimeout(t time.Duration) {
 	atomic.StoreInt64(&c.timeout, t.Nanoseconds())
+}
+
+func (c *Client) SetReconnect(interval time.Duration, attempts int) {
+	c.reconnect = true
+	c.reconnectInterval = interval
+	c.reconnectAttempts = attempts
 }

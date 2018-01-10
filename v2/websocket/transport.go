@@ -14,6 +14,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type wsFactory struct {
+	baseURL string
+}
+
+func (w *wsFactory) Create() Asynchronous {
+	return newWs(w.baseURL)
+}
+
+func newWsFactory(baseURL string) AsynchronousFactory {
+	return &wsFactory{
+		baseURL: baseURL,
+	}
+}
+
 func newWs(baseURL string) *ws {
 	return &ws{
 		BaseURL:    baseURL,

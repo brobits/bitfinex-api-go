@@ -12,11 +12,13 @@ import (
 // method of testing with mocked endpoints
 func TestTicker(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce)
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce)
 
 	// setup listener
 	listener := newListener()

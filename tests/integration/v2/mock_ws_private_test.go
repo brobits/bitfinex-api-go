@@ -11,11 +11,13 @@ import (
 
 func TestAuthentication(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
 
 	// setup listener
 	listener := newListener()
@@ -54,11 +56,13 @@ func TestAuthentication(t *testing.T) {
 
 func TestWalletBalanceUpdates(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
 
 	// setup listener
 	listener := newListener()
@@ -125,11 +129,13 @@ func TestWalletBalanceUpdates(t *testing.T) {
 
 func TestNewOrder(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
 
 	// setup listener
 	listener := newListener()
@@ -189,11 +195,13 @@ func TestNewOrder(t *testing.T) {
 
 func TestFills(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
 
 	// setup listener
 	listener := newListener()
@@ -350,11 +358,13 @@ func TestFills(t *testing.T) {
 
 func TestCancel(t *testing.T) {
 	// create transport & nonce mocks
+	aFactory := newTestAsyncFactory()
 	async := newTestAsync()
+	aFactory.AsyncToCreate = async
 	nonce := &MockNonceGenerator{}
 
 	// create client
-	ws := websocket.NewClientWithAsyncNonce(async, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
+	ws := websocket.NewClientWithAsyncNonce(aFactory, nonce).Credentials("apiKeyABC", "apiSecretXYZ")
 
 	// setup listener
 	listener := newListener()

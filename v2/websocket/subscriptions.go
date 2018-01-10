@@ -106,6 +106,18 @@ func (s *subscriptions) removeBySubID(subID string) error {
 	return nil
 }
 
+func (s *subscriptions) getActiveSubscriptions() []*subscription {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	subs := make([]*subscription, len(s.subsByChanID)) // activated subs only
+	i := 0
+	for _, sub := range s.subsByChanID {
+		subs[i] = sub
+		i++
+	}
+	return subs
+}
+
 func (s *subscriptions) activate(subID string, chanID int64) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
