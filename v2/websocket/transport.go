@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +29,7 @@ type ws struct {
 	BaseURL       string
 	TLSSkipVerify bool
 	timeout       int64
+	ping          int64
 	downstream    chan []byte
 	userShutdown  bool
 
@@ -37,6 +37,7 @@ type ws struct {
 	finished chan error    // signal to parent with error, if applicable
 }
 
+// TODO ping period write pump
 func (w *ws) Connect() error {
 	if w.ws != nil {
 		return nil // no op
@@ -59,6 +60,11 @@ func (w *ws) Connect() error {
 		return err
 	}
 	w.ws = ws
+
+	if w.timeout != 0 {
+		ws.SetReadDeadline(time.Now().Add(time.Duration(w.timeout)))
+	}
+
 	go w.listenWs()
 	return nil
 }
@@ -105,9 +111,6 @@ func (w *ws) listenWs() {
 		if w.ws == nil {
 			return
 		}
-		if atomic.LoadInt64(&w.timeout) != 0 {
-			w.ws.SetReadDeadline(time.Now().Add(time.Duration(w.timeout)))
-		}
 
 		select {
 		case <-w.shutdown: // external shutdown request
@@ -122,8 +125,7 @@ func (w *ws) listenWs() {
 				w.cleanup(err)
 				return
 			}
-			log.Printf("transport read error: %s", err.Error())
-			debug.PrintStack()
+			continue
 		}
 		w.downstream <- msg
 	}
@@ -158,4 +160,8 @@ func (w *ws) Close() {
 
 func (w *ws) setReadTimeout(t time.Duration) {
 	atomic.StoreInt64(&w.timeout, t.Nanoseconds())
+}
+
+func (w *ws) setPingPeriod(t time.Duration) {
+	atomic.StoreInt64(&w.ping, t.Nanoseconds())
 }
